@@ -1,0 +1,37 @@
+(ns clj-libssh2.libssh2.scp
+  (:require [net.n01se.clojure-jna :as jna])
+  (:import [com.sun.jna Pointer]))
+
+; LIBSSH2_CHANNEL *libssh2_scp_recv(LIBSSH2_SESSION *session,
+;                                   const char *path,
+;                                   struct stat *sb);
+(def recv (jna/to-fn Pointer ssh2/libssh2_scp_recv))
+
+; LIBSSH2_CHANNEL *libssh2_scp_recv2(LIBSSH2_SESSION *session,
+;                                   const char *path,
+;                                   struct stat *sb);
+(def recv2 (jna/to-fn Pointer ssh2/libssh2_scp_recv2))
+
+; LIBSSH2_CHANNEL *libssh2_scp_send_ex(LIBSSH2_SESSION *session,
+;                                      const char *path,
+;                                      int mode,
+;                                      size_t size,
+;                                      long mtime,
+;                                      long atime);
+(def send-ex (jna/to-fn Pointer ssh2/libssh2_scp_send_ex))
+
+; LIBSSH2_CHANNEL * libssh2_scp_send64 (LIBSSH2_SESSION *session,
+;                                       const char *path,
+;                                       int mode,
+;                                       libssh2_int64_t size,
+;                                       time_t mtime,
+;                                       time_t atime);
+(def send64 (jna/to-fn Pointer ssh2/libssh2_scp_send64))
+
+; LIBSSH2_CHANNEL * libssh2_scp_send (LIBSSH2_SESSION *session,
+;                                     const char *path,
+;                                     int mode,
+;                                     libssh2_int64_t size);
+(defn send
+  [session path mode size]
+  (send-ex session path mode size 0 0))
