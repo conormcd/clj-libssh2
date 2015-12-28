@@ -1,11 +1,23 @@
 # clj-libssh2
 
-A Clojure wrapper around [libssh2](http://www.libssh2.org/). There are two
-parts to this library. The first is a 
-[JNA](https://github.com/Chouser/clojure-jna) wrap of all of the functions and
-constants in the public API of libssh2. The second is a series of convenience
-functions designed to make this library a suitable replacement for
-[clj-ssh](https://github.com/hugoduncan/clj-ssh).
+A Clojure wrapper around [libssh2](http://www.libssh2.org/). There are three
+parts to this library:
+
+1. A small API for doing most common SSH and SCP operations. You should use
+   this for all new code using this library.
+2. A [JNA](https://github.com/Chouser/clojure-jna) wrap of all of the
+   functions and constants in the public API of libssh2. You should use this
+   if you need to do something unusual. Please file an issue or PR with
+   details of what you end up using this for, so that I can expand the main
+   API.
+3. A series of convenience functions designed to make this library a suitable
+   replacement for [clj-ssh](https://github.com/hugoduncan/clj-ssh). You
+   should use this if you're transitioning code from `clj-ssh` to this
+   library.
+
+## clj-libssh2 API
+
+TODO: Examples
 
 ## libssh2 API
 
