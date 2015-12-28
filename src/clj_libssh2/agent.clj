@@ -26,10 +26,16 @@
       (throw (Exception. "Failed to initialize agent.")))
     (try
       (handle-errors session (libssh2-agent/connect ssh-agent))
-      (loop [previous nil]
-        (when-let [id (get-identity session ssh-agent previous)]
-          (when (not= 0 (libssh2-agent/userauth ssh-agent username id))
-            (recur id))))
+      (when-not (loop [success false
+                       previous nil]
+                  (if success
+                    success
+                    (if-let [id (get-identity session ssh-agent previous)]
+                      (recur
+                        (= 0 (libssh2-agent/userauth ssh-agent username id))
+                        id)
+                      false)))
+        (throw (Exception. "Failed to authenticate with the agent.")))
       (finally
         (handle-errors session (libssh2-agent/disconnect ssh-agent))
         (libssh2-agent/free ssh-agent)))))
