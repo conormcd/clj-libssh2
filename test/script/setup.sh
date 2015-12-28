@@ -67,7 +67,7 @@ generate_user_keys() {
 launch_ssh_agent() {
   require_executable ssh-agent
   eval "$(ssh-agent -s -a "${TMP_DIR}/agent.sock")" > /dev/null
-  ssh-add -D > /dev/null
+  ssh-add -D > /dev/null 2>&1
 }
 
 launch_sshd() {

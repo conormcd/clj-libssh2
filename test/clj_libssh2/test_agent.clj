@@ -11,8 +11,7 @@
   []
   (session/open test/ssh-host
                 test/ssh-port
-                {:username (test/ssh-user)
-                 :agent true}))
+                {:username (test/ssh-user)}))
 
 (defn open-and-close
   []

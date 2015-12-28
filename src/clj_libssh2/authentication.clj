@@ -2,55 +2,63 @@
   (:require [clojure.java.io :refer [file]]
             [clj-libssh2.libssh2.userauth :as libssh2-userauth]
             [clj-libssh2.agent :as ssh-agent]
-            [clj-libssh2.error :refer [handle-errors]]))
+            [clj-libssh2.error :refer [handle-errors]])
+  (:import clojure.lang.PersistentArrayMap))
+
+(defprotocol Credentials
+  (valid? [credentials]))
+
+(defrecord AgentCredentials [username]
+  Credentials
+  (valid? [credentials] (some? username)))
+
+(defrecord KeyCredentials [username passphrase private-key public-key]
+  Credentials
+  (valid? [credentials] (and (some? username)
+                             (some? passphrase)
+                             (some? private-key)
+                             (some? public-key)
+                             (.exists (file private-key))
+                             (.exists (file public-key)))))
+
+(defrecord PasswordCredentials [username password]
+  Credentials
+  (valid? [credentials] (and (some? username) (some? password))))
 
 (defmulti authenticate
-  (fn [session credentials]
-    (cond
-      (and (:username credentials) (:agent credentials))
-      :agent
+  (fn [session credentials] (type credentials)))
 
-      (and (:passphrase credentials)
-           (:public-key credentials)
-           (:private-key credentials)
-           (:username credentials))
-      :key
-
-      (and (:username credentials) (:password credentials))
-      :password
-
-      :else :invalid)))
-
-(defmethod authenticate :invalid
-  [session credentials]
-  (throw (Exception. "Invalid credentials.")))
-
-(defmethod authenticate :agent
+(defmethod authenticate AgentCredentials
   [session credentials]
   (ssh-agent/authenticate session (:username credentials)))
 
-(defmethod authenticate :key
+(defmethod authenticate KeyCredentials
   [session credentials]
-  (let [require-exists (fn [path]
-                         (when-not (.exists (file path))
-                           (throw (Exception.
-                                    (format "%s does not exist." path)))))
-        passphrase (:passphrase credentials)
-        privkey (:private-key credentials)
-        pubkey (:public-key credentials)
-        username (:username credentials)]
-    (require-exists privkey)
-    (require-exists pubkey)
-    (handle-errors session
-      (libssh2-userauth/publickey-fromfile (:session session)
-                                           username
-                                           pubkey
-                                           privkey
-                                           passphrase))))
+  (doseq [keyfile (map #(% credentials) [:private-key :public-key])]
+    (when-not (.exists (file keyfile))
+      (throw (Exception. (format "%s does not exist." keyfile)))))
+  (handle-errors session
+    (libssh2-userauth/publickey-fromfile (:session session)
+                                         (:username credentials)
+                                         (:public-key credentials)
+                                         (:private-key credentials)
+                                         (:passphrase credentials)))
+  true)
 
-(defmethod authenticate :password
+(defmethod authenticate PasswordCredentials
   [session credentials]
-  (let [username (:username credentials)
-        password (:password credentials)]
-    (handle-errors session
-      (libssh2-userauth/password (:session session) username password))))
+  (handle-errors session
+    (libssh2-userauth/password (:session session)
+                               (:username credentials)
+                               (:password credentials)))
+  true)
+
+(defmethod authenticate PersistentArrayMap
+  [session credentials]
+  (loop [m [map->KeyCredentials map->PasswordCredentials map->AgentCredentials]]
+    (let [creds ((first m) credentials)]
+      (if (valid? creds)
+        (authenticate session creds)
+        (if (< 1 (count m))
+          (recur (rest m))
+          (throw (Exception. "Invalid credentials")))))))

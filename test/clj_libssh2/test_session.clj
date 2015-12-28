@@ -14,17 +14,14 @@
                 (merge {:username (test/ssh-user)}
                        (apply hash-map creds))))
 
-(defn- good-session []
-  (open :agent true))
-
 (deftest close-is-robust
   (testing "Closing a good, open connection does not fail."
-    (let [session (good-session)]
+    (let [session (open)]
       (is (= 1 (count @session/sessions)))
       (session/close session)
       (is (= 0 (count @session/sessions)))))
   (testing "Closing a good, open connection more than once does not fail."
-    (let [session (good-session)]
+    (let [session (open)]
       (is (= 1 (count @session/sessions)))
       (session/close session)
       (is (= 0 (count @session/sessions)))
@@ -36,9 +33,9 @@
 (deftest open-works
   (testing "sessions are pooled"
     (is (= 0 (count @session/sessions)))
-    (let [session1 (good-session)]
+    (let [session1 (open)]
       (is (= 1 (count @session/sessions)))
-      (let [session2 (good-session)]
+      (let [session2 (open)]
         (is (= 1 (count @session/sessions)))
         (is (= session1 session2))
         (session/close session1)
@@ -47,7 +44,7 @@
   (testing "throws but doesn't crash on handshake failure"
     (with-redefs [libssh2-session/handshake (constantly libssh2/ERROR_PROTO)]
       (is (= 0 (count @session/sessions)))
-      (is (thrown? Exception (good-session)))
+      (is (thrown? Exception (open)))
       (is (= 0 (count @session/sessions)))))
   (testing "throws but doesn't crash on authentication failure"
       (is (= 0 (count @session/sessions)))

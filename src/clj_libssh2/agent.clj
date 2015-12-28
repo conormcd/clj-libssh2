@@ -36,6 +36,7 @@
                         id)
                       false)))
         (throw (Exception. "Failed to authenticate with the agent.")))
+      true
       (finally
         (handle-errors session (libssh2-agent/disconnect ssh-agent))
         (libssh2-agent/free ssh-agent)))))
