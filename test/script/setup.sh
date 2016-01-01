@@ -37,6 +37,23 @@ ensure_root_dir() {
   fi
 }
 
+generate_known_hosts_files() {
+  local host
+  local port
+  local good_fingerprint
+  local bad_fingerprint
+
+  host=${1:-127.0.0.1}
+  port=${2:-2222}
+
+  good_fingerprint=$(cut -d' ' -f 1,2 "${TMP_DIR}/ssh_host_rsa_key.pub")
+  bad_fingerprint=$(echo "${good_fingerprint}" | tr '[:upper:]' '[:lower:]')
+
+  echo "[$host]:${port} ${good_fingerprint}" > "${TMP_DIR}/known_hosts_good"
+  echo "[$host]:${port} ${bad_fingerprint}" > "${TMP_DIR}/known_hosts_bad"
+  echo "" > "${TMP_DIR}/known_hosts_missing"
+}
+
 generate_sshd_host_keys() {
   require_executable ssh-keygen
   ssh-keygen -N '' -t rsa1 -f "${TMP_DIR}/ssh_host_key" > /dev/null
@@ -80,6 +97,7 @@ launch_sshd() {
 
   require_executable sshd
   generate_sshd_host_keys
+  generate_known_hosts_files "${host}" "${port}"
   generate_user_keys
   sshd=$(which sshd)
   ${sshd} -f /dev/null \

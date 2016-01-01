@@ -12,6 +12,10 @@
   [script]
   (str/join "/" [(System/getProperty "user.dir") "test/script" script]))
 
+(defn known-hosts-file
+  [variant]
+  (str/join "/" [(System/getProperty "user.dir") "test/tmp" (str "known_hosts_" (name variant))]))
+
 (defn run-test-script
   [script & args]
   (let [result (apply sh/sh "sh" (test-script script) (map str args))]
