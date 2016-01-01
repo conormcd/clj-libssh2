@@ -2,7 +2,7 @@
   (:require [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
-            [clj-libssh2.error :refer [handle-errors]]
+            [clj-libssh2.error :refer [handle-errors with-timeout]]
             [clj-libssh2.socket :as socket]))
 
 (def sessions (atom {}))
@@ -22,14 +22,20 @@
   ([^Session session]
    (destroy-session session "Shutting down normally." false))
   ([^Session {session :session} ^String reason ^Boolean raise]
-   (handle-errors nil (libssh2-session/disconnect session reason))
-   (handle-errors nil (libssh2-session/free session))
+   (handle-errors nil
+    (with-timeout :session
+      (libssh2-session/disconnect session reason)))
+   (handle-errors nil
+    (with-timeout :session
+      (libssh2-session/free session)))
    (when raise
      (throw (Exception. reason)))))
 
 (defn- handshake
   [^Session {session :session socket :socket :as s}]
-  (handle-errors s (libssh2-session/handshake session socket)))
+  (handle-errors s
+    (with-timeout :session
+      (libssh2-session/handshake session socket))))
 
 (defn- session-id
   "Generate the session ID that will be used to pool"

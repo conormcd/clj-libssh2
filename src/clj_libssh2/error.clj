@@ -3,6 +3,10 @@
             [clj-libssh2.libssh2.session :as libssh2-session])
   (:import [com.sun.jna.ptr IntByReference PointerByReference]))
 
+(def timeouts (atom {:agent 10000
+                     :auth 10000
+                     :session 10000}))
+
 (def error-messages
   "All of the error codes that are documented for libssh2 except for
    LIBSSH2_ERROR_SOCKET_NONE which despite its name is a generic error and
@@ -92,3 +96,33 @@
   `(let [res# (do ~@body)]
      (maybe-throw-error (:session ~session) res#)
      res#))
+
+(defn get-timeout
+  "Get a timeout value."
+  [name-or-value]
+  (or (get @timeouts name-or-value) name-or-value 1000))
+
+(defn set-timeout
+  "Update a named timeout value."
+  [timeout-name millis]
+  (swap! timeouts assoc timeout-name millis))
+
+(defmacro with-timeout
+  "Run some code that could return libssh2/ERROR_EAGAIN and if it does, retry
+   until the timeout is hit.
+
+   `timeout` can be either a number of milliseconds or a keyword referring to a
+   named timeout set using `set-timeout`.
+
+   This will *not* interrupt a blocking function as this is usually used with
+   native functions which probably should not be interrupted."
+  [timeout & body]
+  `(let [start# (System/currentTimeMillis)
+         timeout# (get-timeout ~timeout)]
+     (loop [timedout# false]
+       (if timedout#
+         (throw (Exception. "Timeout!"))
+         (let [r# (do ~@body)]
+           (if (= r# libssh2/ERROR_EAGAIN)
+             (recur (< timeout# (- (System/currentTimeMillis) start#)))
+             r#))))))

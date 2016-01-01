@@ -2,7 +2,7 @@
   (:require [clojure.java.io :refer [file]]
             [clj-libssh2.libssh2.userauth :as libssh2-userauth]
             [clj-libssh2.agent :as ssh-agent]
-            [clj-libssh2.error :refer [handle-errors]])
+            [clj-libssh2.error :refer [handle-errors with-timeout]])
   (:import clojure.lang.PersistentArrayMap))
 
 (defprotocol Credentials
@@ -38,19 +38,21 @@
     (when-not (.exists (file keyfile))
       (throw (Exception. (format "%s does not exist." keyfile)))))
   (handle-errors session
-    (libssh2-userauth/publickey-fromfile (:session session)
-                                         (:username credentials)
-                                         (:public-key credentials)
-                                         (:private-key credentials)
-                                         (:passphrase credentials)))
+    (with-timeout :auth
+      (libssh2-userauth/publickey-fromfile (:session session)
+                                           (:username credentials)
+                                           (:public-key credentials)
+                                           (:private-key credentials)
+                                           (:passphrase credentials))))
   true)
 
 (defmethod authenticate PasswordCredentials
   [session credentials]
   (handle-errors session
-    (libssh2-userauth/password (:session session)
-                               (:username credentials)
-                               (:password credentials)))
+    (with-timeout :auth
+      (libssh2-userauth/password (:session session)
+                                 (:username credentials)
+                                 (:password credentials))))
   true)
 
 (defmethod authenticate PersistentArrayMap
