@@ -51,7 +51,7 @@
 ; const char *libssh2_session_hostkey(LIBSSH2_SESSION *session,
 ;                                     size_t *len,
 ;                                     int *type);
-(def hostkey (jna/to-fn String ssh2/libssh2_session_hostkey))
+(def hostkey (jna/to-fn Pointer ssh2/libssh2_session_hostkey))
 
 ; LIBSSH2_SESSION * libssh2_session_init_ex(LIBSSH2_ALLOC_FUNC((*my_alloc)),
 ;                                           LIBSSH2_FREE_FUNC((*my_free)),

@@ -3,11 +3,19 @@
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
             [clj-libssh2.error :refer [handle-errors with-timeout]]
+            [clj-libssh2.known-hosts :as known-hosts]
             [clj-libssh2.socket :as socket]))
 
 (def sessions (atom {}))
 
-(defrecord Session [id session socket])
+; The default options for a session. These are not only the defaults, but an
+; exhaustive list of the legal options.
+(def default-opts
+  {:fail-if-not-in-known-hosts false
+   :fail-unless-known-hosts-matches true
+   :known-hosts-file nil})
+
+(defrecord Session [id session socket host port options])
 
 (defn- create-session
   "Make a native libssh2 session object."
@@ -16,6 +24,11 @@
     (when-not session
       (throw (Exception. "Failed to create a libssh2 session.")))
     session))
+
+(defn- create-session-options
+  [opts]
+  {:pre [(every? (set (keys default-opts)) (keys opts))]}
+  (merge default-opts opts))
 
 (defn- destroy-session
   "Free a libssh2 session object from a Session."
@@ -38,9 +51,14 @@
       (libssh2-session/handshake session socket))))
 
 (defn- session-id
-  "Generate the session ID that will be used to pool"
-  [host port credentials]
-  (format "%s@%s:%d" (:username credentials) host port))
+  "Generate the session ID that will be used to pool sessions."
+  [host port credentials opts]
+  (format "%s@%s:%d-%d-%d"
+          (:username credentials)
+          host
+          port
+          (.hashCode credentials)
+          (.hashCode opts)))
 
 (defn close
   "Disconnect an SSH session and discard the session."
@@ -54,22 +72,29 @@
 
 (defn open
   "Connect to an SSH server and start a session."
-  [host port credentials]
-  (when (empty? @sessions)
-    (handle-errors nil (libssh2/init 0)))
-  (let [id (session-id host port credentials)]
-    (if (contains? @sessions id)
-      (get @sessions id)
-      (let [session (Session. (session-id host port credentials)
-                              (create-session)
-                              (socket/connect host port))]
-        (when (> 0 (:socket session))
-          (destroy-session session "Shutting down due to bad socket." true))
-        (try
-          (handshake session)
-          (authenticate session credentials)
-          (swap! sessions assoc (:id session) session)
-          (get @sessions (:id session))
-          (catch Exception e
-            (close session)
-            (throw e)))))))
+  ([host port credentials]
+   (open host port credentials {}))
+  ([host port credentials opts]
+   (when (empty? @sessions)
+     (handle-errors nil (libssh2/init 0)))
+   (let [session-options (create-session-options opts)
+         id (session-id host port credentials session-options)]
+     (if (contains? @sessions id)
+       (get @sessions id)
+       (let [session (Session. id
+                               (create-session)
+                               (socket/connect host port)
+                               host
+                               port
+                               (create-session-options opts))]
+         (when (> 0 (:socket session))
+           (destroy-session session "Shutting down due to bad socket." true))
+         (try
+           (handshake session)
+           (known-hosts/check session)
+           (authenticate session credentials)
+           (swap! sessions assoc (:id session) session)
+           (get @sessions (:id session))
+           (catch Exception e
+             (close session)
+             (throw e))))))))

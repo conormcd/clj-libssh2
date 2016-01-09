@@ -49,4 +49,12 @@
   (testing "throws but doesn't crash on authentication failure"
       (is (= 0 (count @session/sessions)))
       (is (thrown? Exception (open :password "totally-wrong-password")))
-      (is (= 0 (count @session/sessions)))))
+      (is (= 0 (count @session/sessions))))
+  (testing "open rejects bad options"
+    (is (= 0 (count @session/sessions)))
+    (is (thrown? AssertionError (session/open test/ssh-host
+                                              test/ssh-port
+                                              {:username (test/ssh-user)}
+                                              {:bad-option :bad-option-value})))
+    (is (= 0 (count @session/sessions)))
+    ))
