@@ -90,6 +90,7 @@
          (when (> 0 (:socket session))
            (destroy-session session "Shutting down due to bad socket." true))
          (try
+           (libssh2-session/set-blocking (:session session) 0)
            (handshake session)
            (known-hosts/check session)
            (authenticate session credentials)
@@ -98,3 +99,7 @@
            (catch Exception e
              (close session)
              (throw e))))))))
+
+(defn get-timeout
+  [session]
+  (libssh2-session/get-timeout (:session session)))
