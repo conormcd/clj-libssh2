@@ -11,9 +11,13 @@
 ; The default options for a session. These are not only the defaults, but an
 ; exhaustive list of the legal options.
 (def default-opts
-  {:fail-if-not-in-known-hosts false
+  {:character-set "UTF-8"
+   :fail-if-not-in-known-hosts false
    :fail-unless-known-hosts-matches true
-   :known-hosts-file nil})
+   :known-hosts-file nil
+   :read-chunk-size (* 1024 1024)
+   :read-timeout 60000
+   :write-chunk-size (* 1024 1024)})
 
 (defrecord Session [id session socket host port options])
 
@@ -27,7 +31,7 @@
 
 (defn- create-session-options
   [opts]
-  {:pre [(every? (set (keys default-opts)) (keys opts))]}
+  {:pre [(map? opts) (every? (set (keys default-opts)) (keys opts))]}
   (merge default-opts opts))
 
 (defn- destroy-session
@@ -86,7 +90,7 @@
                                (socket/connect host port)
                                host
                                port
-                               (create-session-options opts))]
+                               session-options)]
          (when (> 0 (:socket session))
            (destroy-session session "Shutting down due to bad socket." true))
          (try
@@ -103,3 +107,14 @@
 (defn get-timeout
   [session]
   (libssh2-session/get-timeout (:session session)))
+
+(defmacro with-session
+  [session session-params & body]
+  `(let [~session (open (:hostname ~session-params)
+                        (:port ~session-params)
+                        (:credentials ~session-params)
+                        (dissoc ~session-params :hostname :port :credentials))]
+     (try
+       (do ~@body)
+       (finally
+         (close ~session)))))
