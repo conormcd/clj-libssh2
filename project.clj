@@ -5,4 +5,7 @@
             :url "https://github.com/conormcd/clj-libssh2/blob/master/LICENSE"}
   :pedantic? :abort
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [net.n01se/clojure-jna "1.0.0"]])
+                 [net.n01se/clojure-jna "1.0.0"]]
+  :jvm-opts ["-Xmx1g"
+             "-XX:+TieredCompilation"
+             "-XX:TieredStopAtLevel=1"])
