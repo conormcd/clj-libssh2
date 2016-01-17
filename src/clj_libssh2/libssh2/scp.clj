@@ -1,4 +1,5 @@
 (ns clj-libssh2.libssh2.scp
+  (:refer-clojure :exclude [send])
   (:require [net.n01se.clojure-jna :as jna])
   (:import [com.sun.jna Pointer]))
 
@@ -6,11 +7,6 @@
 ;                                   const char *path,
 ;                                   struct stat *sb);
 (def recv (jna/to-fn Pointer ssh2/libssh2_scp_recv))
-
-; LIBSSH2_CHANNEL *libssh2_scp_recv2(LIBSSH2_SESSION *session,
-;                                   const char *path,
-;                                   struct stat *sb);
-(def recv2 (jna/to-fn Pointer ssh2/libssh2_scp_recv2))
 
 ; LIBSSH2_CHANNEL *libssh2_scp_send_ex(LIBSSH2_SESSION *session,
 ;                                      const char *path,

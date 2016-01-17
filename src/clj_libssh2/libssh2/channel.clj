@@ -1,4 +1,5 @@
 (ns clj-libssh2.libssh2.channel
+  (:refer-clojure :exclude [flush read])
   (:require [net.n01se.clojure-jna :as jna]
             [clj-libssh2.libssh2 :as libssh2])
   (:import [com.sun.jna Pointer]))
