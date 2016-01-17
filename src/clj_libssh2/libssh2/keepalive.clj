@@ -7,4 +7,4 @@
 (def config (jna/to-fn Void ssh2/libssh2_keepalive_config))
 
 ; int libssh2_keepalive_send (LIBSSH2_SESSION *session, int *seconds_to_next);
-(def send (jna/to-fn Void ssh2/libssh2_keepalive_send))
+(def send (jna/to-fn Integer ssh2/libssh2_keepalive_send))
