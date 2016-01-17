@@ -8,11 +8,6 @@
 ;                                   struct stat *sb);
 (def recv (jna/to-fn Pointer ssh2/libssh2_scp_recv))
 
-; LIBSSH2_CHANNEL *libssh2_scp_recv2(LIBSSH2_SESSION *session,
-;                                   const char *path,
-;                                   struct stat *sb);
-(def recv2 (jna/to-fn Pointer ssh2/libssh2_scp_recv2))
-
 ; LIBSSH2_CHANNEL *libssh2_scp_send_ex(LIBSSH2_SESSION *session,
 ;                                      const char *path,
 ;                                      int mode,
