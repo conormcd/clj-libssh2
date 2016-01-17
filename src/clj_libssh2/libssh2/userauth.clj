@@ -1,4 +1,5 @@
 (ns clj-libssh2.libssh2.userauth
+  (:refer-clojure :exclude [list])
   (:require [net.n01se.clojure-jna :as jna]))
 
 ; int libssh2_userauth_authenticated(LIBSSH2_SESSION *session);

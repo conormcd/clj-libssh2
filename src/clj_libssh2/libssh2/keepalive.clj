@@ -1,4 +1,5 @@
 (ns clj-libssh2.libssh2.keepalive
+  (:refer-clojure :exclude [send])
   (:require [net.n01se.clojure-jna :as jna]))
 
 ; void libssh2_keepalive_config (LIBSSH2_SESSION *session,

@@ -1,4 +1,5 @@
 (ns clj-libssh2.libssh2.knownhost
+  (:refer-clojure :exclude [get])
   (:require [net.n01se.clojure-jna :as jna])
   (:import [com.sun.jna Pointer]))
 
