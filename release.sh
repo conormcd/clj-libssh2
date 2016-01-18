@@ -5,6 +5,11 @@ set -o nounset
 export GITHUB_USER=conormcd
 export GITHUB_REPO=clj-libssh2
 
+abort() {
+  echo "$@"
+  exit 1
+}
+
 current_version() {
   grep -m1 '(defproject' project.clj | \
     sed -e 's,^.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*$,\1,'
@@ -115,15 +120,29 @@ github_release() {
   done
 }
 
+clojars_deploy() {
+  lein deploy clojars 2>&1 | sed -e 's,^,  ,'
+}
+
 v=$(new_version)
 update_project_clj "${v}"
 build_jars
 save_artifacts
 if [ "$(branch)" = "master" ]; then
-  # TODO: Make the lack of a GitHub token fatal.
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    ensure_github_release_tool_installed
-    github_release "${v}"
+  if [ -z "${CLOJARS_USERNAME:-}" ]; then
+    abort "Missing environment variable: CLOJARS_USERNAME"
   fi
-  # TODO: Push to clojars
+  if [ -z "${CLOJARS_PASSWORD:-}" ]; then
+    abort "Missing environment variable: CLOJARS_PASSWORD"
+  fi
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    abort "Missing environment variable: GITHUB_TOKEN"
+  fi
+
+  # Make a GitHub release
+  ensure_github_release_tool_installed
+  github_release "${v}"
+
+  # Push to clojars
+  clojars_deploy
 fi

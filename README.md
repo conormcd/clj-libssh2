@@ -1,5 +1,7 @@
 # clj-libssh2
 
+![](https://clojars.org/clj-libssh2/latest-version.svg)
+
 A Clojure wrapper around [libssh2](http://www.libssh2.org/). There are three
 parts to this library:
 
