@@ -11,6 +11,7 @@
                                               :username [:gpg :env/clojars_username]
                                               :password [:gpg :env/clojars_password]
                                               :sign-releases false}]]
+  :codox {:output-path "doc/api"}
   :jvm-opts ["-Xmx1g"
              "-XX:+TieredCompilation"
              "-XX:TieredStopAtLevel=1"])

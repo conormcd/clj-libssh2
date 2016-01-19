@@ -85,6 +85,29 @@ save_artifacts() {
   fi
 }
 
+update_api_docs() {
+  local _version
+  _version=$1
+
+  set -x
+  git config --global user.email "${GITHUB_USER}@users.noreply.github.com"
+  git config --global user.name "${GITHUB_USER}/${GITHUB_REPO} release.sh"
+  git clone -b gh-pages git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git doc/api
+  lein codox
+  (
+    cd doc/api
+    cat > circle.yml <<EOF
+general:
+  branches:
+    ignore:
+      - gh-pages
+EOF
+    git add .
+    git commit -m "Docs for version ${_version}"
+    git push origin gh-pages
+  )
+}
+
 ensure_github_release_tool_installed() {
   local _cwd
   _cwd=$(pwd)
@@ -124,6 +147,10 @@ clojars_deploy() {
   lein deploy clojars 2>&1 | sed -e 's,^,  ,'
 }
 
+cleanup() {
+  git clean -ffdx
+}
+
 v=$(new_version)
 update_project_clj "${v}"
 build_jars
@@ -145,4 +172,8 @@ if [ "$(branch)" = "master" ]; then
 
   # Push to clojars
   clojars_deploy
+
+  # Push new docs
+  update_api_docs "${v}"
 fi
+cleanup
