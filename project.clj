@@ -6,6 +6,7 @@
   :pedantic? :abort
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [net.n01se/clojure-jna "1.0.0"]]
+  :profiles {:dev {:plugins [[lein-codox "0.9.1"]]}}
   :deploy-repositories ^:replace [["clojars" {:url "https://clojars.org/repo"
                                               :username [:gpg :env/clojars_username]
                                               :password [:gpg :env/clojars_password]
