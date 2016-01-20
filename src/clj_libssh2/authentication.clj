@@ -1,12 +1,16 @@
 (ns clj-libssh2.authentication
+  "Authenticate a session."
   (:require [clojure.java.io :refer [file]]
-            [clj-libssh2.libssh2.userauth :as libssh2-userauth]
-            [clj-libssh2.agent :as ssh-agent]
-            [clj-libssh2.error :refer [handle-errors with-timeout]])
+            [clj-libssh2.agent :as agent]
+            [clj-libssh2.error :refer [handle-errors with-timeout]]
+            [clj-libssh2.libssh2.userauth :as libssh2-userauth])
   (:import clojure.lang.PersistentArrayMap))
 
 (defprotocol Credentials
-  (valid? [credentials]))
+  "A datatype to represent a way of authentication and the necessary data to
+   use that authentication method."
+  (valid? [credentials]
+    "Check if this Credentials instance is internally consistent."))
 
 (defrecord AgentCredentials [username]
   Credentials
@@ -26,11 +30,25 @@
   (valid? [credentials] (and (some? username) (some? password))))
 
 (defmulti authenticate
+  "Authenticate a session.
+
+   Arguments:
+
+   session      A clj-libssh2.session.Session object referring to an SSH
+                session which has not yet been authenticated.
+   credentials  Either an instance of Credentials or a map which can be
+                transformed into a Credentials object.
+
+   Return:
+
+   True on success. An exception will be thrown if ther session could not be
+   authenticated."
+  {:arglists '([session credentials])}
   (fn [session credentials] (type credentials)))
 
 (defmethod authenticate AgentCredentials
   [session credentials]
-  (ssh-agent/authenticate session (:username credentials)))
+  (agent/authenticate session (:username credentials)))
 
 (defmethod authenticate KeyCredentials
   [session credentials]

@@ -1,12 +1,18 @@
 (ns clj-libssh2.error
+  "Utility functions for making error handling easier when calling native
+   functions."
   (:require [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session])
   (:import [com.sun.jna.ptr IntByReference PointerByReference]))
 
-(def timeouts (atom {:agent 10000
-                     :auth 10000
-                     :known-hosts 10000
-                     :session 10000}))
+(def timeouts
+  "An atom map where the keys are keywords being the symbolic names of named
+   timeouts (see get-timeout/set-timeout) and the values are the number of
+   milliseconds for that timeout."
+  (atom {:agent 10000
+         :auth 10000
+         :known-hosts 10000
+         :session 10000}))
 
 (def error-messages
   "All of the error codes that are documented for libssh2 except for
@@ -62,7 +68,17 @@
 
 (defn session-error-message
   "Call libssh2_session_last_error and return the error message given or nil if
-   there was no error."
+   there was no error.
+
+   Arguments:
+
+   session The clj-libssh2.session.Session object for the session where the
+           error occurred.
+
+   Return:
+
+   The message from libssh2_session_last_error or nil if an error message is
+   available and the provided session was not nil."
   [session]
   (when session
     (let [len (IntByReference.)
@@ -72,10 +88,29 @@
         (String. (.getByteArray (.getValue buf) 0 (.getValue len)) "ASCII")))))
 
 (defn maybe-throw-error
-  "If the provided error code is a negative number and is not equal to
-   LIBSSH2_ERROR_EAGAIN then an exception will be thrown. An attempt will be
-   made to construct a relevant human-readable error message from either the
-   session object or from the table of fixed error messages above."
+  "Convert an error return from a native function call into an exception, if
+   it's warranted.
+
+   Arguments:
+
+   session    The clj-libssh2.session.Session object for the session where the
+              error may have occurred.
+   error-code An integer return code from a native function.
+
+   Return:
+
+   Nil if the return code was positive or if the return code was equal to
+   LIBSSH2_ERROR_EAGAIN. In all other cases an exception is thrown using
+   ex-info. The message of the exception is the best available message,
+   preferring the message from session-error-message, falling back to the
+   matching message in error-messages and finally falling back to a generic
+   message containing the numeric value of the error. The additional
+   information map attached using ex-info has the following keys and values
+   which may be useful to debug the error handling itself:
+
+   :error         The error message from error-messages, if any.
+   :session-error The error message from session-error-message, if any.
+   :error-code    The numeric return value."
   [session error-code]
   (when (and (some? error-code)
              (> 0 error-code)
@@ -91,32 +126,72 @@
 
 (defmacro handle-errors
   "Run some code that might return a negative number to indicate an error.
-   Raise an exception if this happens. Pass a non-nil session if you want more
-   relevant error messages."
+   Raise an exception if this happens.
+
+   Arguments:
+
+   session A clj-libssh2.session.Session which can be used to generate better
+           error messages via session-error-message. This may be nil, in which
+           case more generic error messages will be used.
+
+   Return:
+
+   The return value of the body, *except* in cases where it's a negative number
+   (but not equal to LIBSSH2_ERROR_EAGAIN). In those cases an exception will be
+   thrown using maybe-throw-error."
   [session & body]
   `(let [res# (do ~@body)]
      (maybe-throw-error (:session ~session) res#)
      res#))
 
 (defn get-timeout
-  "Get a timeout value."
+  "Get a timeout value.
+
+   Arguments:
+
+   name-or-value Either the name of a symbolic timeout (e.g. :session) or a
+                 number of milliseconds.
+
+   Return:
+
+   A number of milliseconds for the timeout."
   [name-or-value]
   (or (get @timeouts name-or-value) name-or-value 1000))
 
 (defn set-timeout
-  "Update a named timeout value."
+  "Update a timeout value.
+
+   Arguments:
+
+   timeout-name The name of a symbolic timeout.
+   millis       The number of milliseconds for that timeout.
+
+   Return:
+
+   A map of all the current symbolic timeouts."
   [timeout-name millis]
   (swap! timeouts assoc timeout-name millis))
 
 (defmacro with-timeout
   "Run some code that could return libssh2/ERROR_EAGAIN and if it does, retry
-   until the timeout is hit.
+   until the timeout is hit. This will *not* interrupt a blocking function as
+   this is usually used with native functions which probably should not be
+   interrupted.
 
-   `timeout` can be either a number of milliseconds or a keyword referring to a
-   named timeout set using `set-timeout`.
+   N.B. If the function you're calling will block in order to wait on activity
+        on the current session's socket, then you should use
+        clj-libssh2.socket/block instead as this will select on the socket and
+        produce much better retry behaviour.
 
-   This will *not* interrupt a blocking function as this is usually used with
-   native functions which probably should not be interrupted."
+   Arguments:
+
+   timeout Either a number of milliseconds or a keyword referring to a named
+           timeout set using set-timeout.
+
+   Return:
+
+   Either the return value of the code being wrapped or an exception if the
+   timeout is exceeded."
   [timeout & body]
   `(let [start# (System/currentTimeMillis)
          timeout# (get-timeout ~timeout)]

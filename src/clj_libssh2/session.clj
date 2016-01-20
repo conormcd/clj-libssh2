@@ -1,4 +1,5 @@
 (ns clj-libssh2.session
+  "Functions for creating and managing sessions."
   (:require [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
@@ -6,11 +7,14 @@
             [clj-libssh2.known-hosts :as known-hosts]
             [clj-libssh2.socket :as socket]))
 
-(def sessions (atom {}))
+(def sessions
+  "A pool of currently running sessions. This is an atomic map where the keys
+   are session IDs and the values are running session objects."
+  (atom {}))
 
-; The default options for a session. These are not only the defaults, but an
-; exhaustive list of the legal options.
 (def default-opts
+  "The default options for a session. These are not only the defaults, but an
+   exhaustive list of the legal options."
   {:character-set "UTF-8"
    :fail-if-not-in-known-hosts false
    :fail-unless-known-hosts-matches true
@@ -22,7 +26,12 @@
 (defrecord Session [id session socket host port options])
 
 (defn- create-session
-  "Make a native libssh2 session object."
+  "Make a native libssh2 session object.
+
+   Return:
+
+   A Pointer representing a libssh2 session object. Throws an exception on
+   failure."
   []
   (let [session (libssh2-session/init)]
     (when-not session
@@ -30,15 +39,39 @@
     session))
 
 (defn- create-session-options
+  "Take a session options map, do some type/shape enforcement and merge it with
+   the defaults.
+
+   Arguments:
+
+   opts A map of session options.
+
+   Return:
+
+   A map of session options which is guaranteed to have a value for all of the
+   keys in default-opts."
   [opts]
   {:pre [(map? opts) (every? (set (keys default-opts)) (keys opts))]}
   (merge default-opts opts))
 
 (defn- destroy-session
-  "Free a libssh2 session object from a Session."
-  ([^Session session]
+  "Free a libssh2 session object from a Session and optionally raise an
+   exception.
+
+   Arguments:
+
+   session  The Session that we're shutting down.
+   reason   The reason we're disconnecting from the remote host. The default is
+            \"Shutting down normally.\"
+   raise    Boolean. True if this function should throw an exception after
+            shutting down. Defaults to false.
+
+   Return:
+
+   nil or throws an exception if requested."
+  ([session]
    (destroy-session session "Shutting down normally." false))
-  ([^Session {session :session} ^String reason ^Boolean raise]
+  ([{session :session} reason raise]
    (handle-errors nil
     (with-timeout :session
       (libssh2-session/disconnect session reason)))
@@ -49,13 +82,33 @@
      (throw (Exception. reason)))))
 
 (defn- handshake
-  [^Session {session :session socket :socket :as s}]
+  "Perform the startup handshake with the remote host.
+
+   Arguments:
+
+   session The Session for the connection we're trying to start up.
+
+   Return:
+
+   0 on success. Throws an exception on failure."
+  [{session :session socket :socket :as s}]
   (handle-errors s
     (with-timeout :session
       (libssh2-session/handshake session socket))))
 
 (defn- session-id
-  "Generate the session ID that will be used to pool sessions."
+  "Generate the session ID that will be used to pool sessions.
+
+   Arguments:
+
+   host         The hostname or IP of the remote host.
+   port         The port we're connecting to.
+   credentials  The credentials to be used to authenticate the session.
+   opts         The session options.
+
+   Return:
+
+   A string that will uniquely identify a session."
   [host port credentials opts]
   (format "%s@%s:%d-%d-%d"
           (:username credentials)
@@ -65,8 +118,16 @@
           (.hashCode opts)))
 
 (defn close
-  "Disconnect an SSH session and discard the session."
-  [^Session {id :id}]
+  "Disconnect an SSH session and discard the session.
+
+   Arguments:
+
+   session The Session that we want to disconnect and close.
+
+   Return:
+
+   nil."
+  [{id :id}]
   (when-let [session (get @sessions id)]
     (destroy-session session)
     (socket/close (:socket session))
@@ -75,7 +136,19 @@
       (libssh2/exit))))
 
 (defn open
-  "Connect to an SSH server and start a session."
+  "Connect to an SSH server, start a session and authenticate it.
+
+   Arguments:
+
+   host         The hostname or IP of the remote host.
+   port         The port to connect to.
+   credentials  An instance of clj-libssh2.authentication.Credentials or a map
+                that can be transformed into one.
+   opts         A map with overrides for the default options.
+
+   Return:
+
+   A Session object for the connected and authenticated session."
   ([host port credentials]
    (open host port credentials {}))
   ([host port credentials opts]
@@ -104,11 +177,15 @@
              (close session)
              (throw e))))))))
 
-(defn get-timeout
-  [session]
-  (libssh2-session/get-timeout (:session session)))
-
 (defmacro with-session
+  "A convenience macro for running some code with a particular session.
+
+   Arguments:
+
+   session        This will be bound to a connected and authenticated Session.
+   session-params This is a map where the keys are any valid option (see
+                  default-opts) plus :hostname, :port and :credentials which
+                  will be passed as the first three arguments to open."
   [session session-params & body]
   `(let [~session (open (:hostname ~session-params)
                         (:port ~session-params)

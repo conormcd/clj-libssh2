@@ -17,6 +17,9 @@ parts to this library:
    should use this if you're transitioning code from `clj-ssh` to this
    library.
 
+Documentation for the latest release should always be available at:
+http://conormcd.github.io/clj-libssh2/
+
 ## clj-libssh2 API
 
 The primary public API for this library is the following set of functions:

@@ -7,7 +7,7 @@
 
 (def VERSION "1.6.0")
 (def VERSION_MAJOR 1)
-(def VERSION_MINOR 1)
+(def VERSION_MINOR 6)
 (def VERSION_PATCH 0)
 (def VERSION_NUM 0x010600)
 (def SSH_BANNER "SSH-1.0-libssh2_1.6.0")
@@ -221,37 +221,60 @@
 (def TRACE_PUBLICKEY (bit-shift-left 1 8))
 (def TRACE_SOCKET (bit-shift-left 1 9))
 
-; int libssh2_banner_set(LIBSSH2_SESSION *session, const char *banner);
-(def banner-set (jna/to-fn Integer ssh2/libssh2_banner_set))
+(def ^{:arglists '([session banner]) :deprecated "libssh2"} banner-set
+  "int libssh2_banner_set(LIBSSH2_SESSION *session, const char *banner);"
+  (jna/to-fn Integer ssh2/libssh2_banner_set))
 
-; libssh2_base64_decode
-(def base64-decode (jna/to-fn Integer ssh2/libssh2_base64_decode))
+(def ^{:arglists '([session dest dest-len src src-len]) :deprecated "libssh2"} base64-decode
+  "
+   int libssh2_base64_decode(LIBSSH2_SESSION *session,
+                             char **dest
+                             unsigned int *dest_len
+                             const char *src
+                             unsigned int src_len);"
+  (jna/to-fn Integer ssh2/libssh2_base64_decode))
 
-; void libssh2_exit(void);
-(def exit (jna/to-fn Void ssh2/libssh2_exit))
+(def ^{:arglists '([])} exit
+  "void libssh2_exit(void);"
+  (jna/to-fn Void ssh2/libssh2_exit))
 
-; void libssh2_free(LIBSSH2_SESSION *session, void *ptr);
-(def free (jna/to-fn Void ssh2/libssh2_free))
+(def ^{:arglists '([session ptr])} free
+  "void libssh2_free(LIBSSH2_SESSION *session, void *ptr);"
+  (jna/to-fn Void ssh2/libssh2_free))
 
-; const char * libssh2_hostkey_hash(LIBSSH2_SESSION *session, int hash_type);
-(def hostkey-hash (jna/to-fn String ssh2/libssh2_hostkey_hash))
+(def ^{:arglists '([session hash-type])} hostkey-hash
+  "const char * libssh2_hostkey_hash(LIBSSH2_SESSION *session, int hash_type);"
+  (jna/to-fn String ssh2/libssh2_hostkey_hash))
 
-; int libssh2_init(int flags);
-(def init (jna/to-fn Integer ssh2/libssh2_init))
+(def ^{:arglists '([flags])} init
+  "int libssh2_init(int flags);"
+  (jna/to-fn Integer ssh2/libssh2_init))
 
-; int libssh2_poll(LIBSSH2_POLLFD *fds, unsigned int nfds, long timeout);
-(def poll (jna/to-fn Integer ssh2/libssh2_poll))
+(def ^{:arglists '([fds nfds timeout]) :deprecated "libssh2"} poll
+  "int libssh2_poll(LIBSSH2_POLLFD *fds, unsigned int nfds, long timeout);"
+  (jna/to-fn Integer ssh2/libssh2_poll))
 
-; int libssh2_poll_channel_read(LIBSSH2_CHANNEL *channel, int extended);
-(def poll-channel-read (jna/to-fn Integer ssh2/libssh2_poll_channel_read))
+(def ^{:arglists '([channel extended]) :deprecated "libssh2"} poll-channel-read
+  "int libssh2_poll_channel_read(LIBSSH2_CHANNEL *channel, int extended);"
+  (jna/to-fn Integer ssh2/libssh2_poll_channel_read))
 
-; int libssh2_trace(LIBSSH2_SESSION *session, int bitmask);
-(def trace (jna/to-fn Integer ssh2/libssh2_trace))
+(def ^{:arglists '([session bitmask])} trace
+  "int libssh2_trace(LIBSSH2_SESSION *session, int bitmask);
 
-; int libssh2_trace_sethandler(LIBSSH2_SESSION *session,
-;                              void* context,
-;                              libssh2_trace_handler_func callback);
-(def trace-sethandler (jna/to-fn Integer ssh2/libssh2_trace_sethandler))
+   Note: This will not work because the bundled copy of libssh2 is a release
+   build and tracing is disabled in release builds."
+  (jna/to-fn Integer ssh2/libssh2_trace))
 
-; const char * libssh2_version(int required_version)
-(def version (jna/to-fn String ssh2/libssh2_version))
+(def ^{:arglists '([session context callback])} trace-sethandler
+  "
+   int libssh2_trace_sethandler(LIBSSH2_SESSION *session,
+                                void* context,
+                                libssh2_trace_handler_func callback);
+
+   Note: This will not work because the bundled copy of libssh2 is a release
+   build and tracing is disabled in release builds."
+  (jna/to-fn Integer ssh2/libssh2_trace_sethandler))
+
+(def ^{:arglists '([required-version])} version
+  "const char * libssh2_version(int required_version);"
+  (jna/to-fn String ssh2/libssh2_version))
