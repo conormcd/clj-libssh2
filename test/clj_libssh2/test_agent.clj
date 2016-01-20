@@ -9,9 +9,7 @@
 
 (defn agent-session
   []
-  (session/open test/ssh-host
-                test/ssh-port
-                {:username (test/ssh-user)}))
+  (session/open test/ssh-host test/ssh-port {:username (test/ssh-user)} {}))
 
 (defn open-and-close
   []

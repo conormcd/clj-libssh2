@@ -1,6 +1,7 @@
 (ns clj-libssh2.session
   "Functions for creating and managing sessions."
-  (:require [clj-libssh2.libssh2 :as libssh2]
+  (:require [clojure.set :as set]
+            [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
             [clj-libssh2.error :refer [handle-errors with-timeout]]
@@ -8,9 +9,10 @@
             [clj-libssh2.socket :as socket]))
 
 (def sessions
-  "A pool of currently running sessions. This is an atomic map where the keys
-   are session IDs and the values are running session objects."
-  (atom {}))
+  "An atomic set of currently active sessions. This is used to trigger calls to
+   libssh2/init and libssh2/exit at appropriate times. It's also used to
+   protect against attempting to close sessions twice."
+  (atom #{}))
 
 (def default-opts
   "The default options for a session. These are not only the defaults, but an
@@ -23,7 +25,7 @@
    :read-timeout 60000
    :write-chunk-size (* 1024 1024)})
 
-(defrecord Session [id session socket host port options])
+(defrecord Session [session socket host port options])
 
 (defn- create-session
   "Make a native libssh2 session object.
@@ -96,27 +98,6 @@
     (with-timeout :session
       (libssh2-session/handshake session socket))))
 
-(defn- session-id
-  "Generate the session ID that will be used to pool sessions.
-
-   Arguments:
-
-   host         The hostname or IP of the remote host.
-   port         The port we're connecting to.
-   credentials  The credentials to be used to authenticate the session.
-   opts         The session options.
-
-   Return:
-
-   A string that will uniquely identify a session."
-  [host port credentials opts]
-  (format "%s@%s:%d-%d-%d"
-          (:username credentials)
-          host
-          port
-          (.hashCode credentials)
-          (.hashCode opts)))
-
 (defn close
   "Disconnect an SSH session and discard the session.
 
@@ -127,11 +108,11 @@
    Return:
 
    nil."
-  [{id :id}]
-  (when-let [session (get @sessions id)]
+  [session]
+  (when (contains? @sessions session)
     (destroy-session session)
     (socket/close (:socket session))
-    (swap! sessions dissoc id)
+    (swap! sessions set/difference #{session})
     (when (empty? @sessions)
       (libssh2/exit))))
 
@@ -149,33 +130,26 @@
    Return:
 
    A Session object for the connected and authenticated session."
-  ([host port credentials]
-   (open host port credentials {}))
-  ([host port credentials opts]
-   (when (empty? @sessions)
-     (handle-errors nil (libssh2/init 0)))
-   (let [session-options (create-session-options opts)
-         id (session-id host port credentials session-options)]
-     (if (contains? @sessions id)
-       (get @sessions id)
-       (let [session (Session. id
-                               (create-session)
-                               (socket/connect host port)
-                               host
-                               port
-                               session-options)]
-         (when (> 0 (:socket session))
-           (destroy-session session "Shutting down due to bad socket." true))
-         (try
-           (libssh2-session/set-blocking (:session session) 0)
-           (handshake session)
-           (known-hosts/check session)
-           (authenticate session credentials)
-           (swap! sessions assoc (:id session) session)
-           (get @sessions (:id session))
-           (catch Exception e
-             (close session)
-             (throw e))))))))
+  [host port credentials opts]
+  (when (empty? @sessions)
+    (handle-errors nil (libssh2/init 0)))
+  (let [session (Session. (create-session)
+                          (socket/connect host port)
+                          host
+                          port
+                          (create-session-options opts))]
+    (when (> 0 (:socket session))
+      (destroy-session session "Shutting down due to bad socket." true))
+    (try
+      (libssh2-session/set-blocking (:session session) 0)
+      (handshake session)
+      (known-hosts/check session)
+      (authenticate session credentials)
+      (swap! sessions conj session)
+      session
+      (catch Exception e
+        (close session)
+        (throw e)))))
 
 (defmacro with-session
   "A convenience macro for running some code with a particular session.
