@@ -11,7 +11,7 @@
 (defn auth
   [creds]
   (is (= 0 (count @session/sessions)))
-  (let [session (session/open test/ssh-host test/ssh-port creds)]
+  (let [session (session/open test/ssh-host test/ssh-port creds {})]
     (is (= 1 (count @session/sessions)))
     (session/close session))
   (is (= 0 (count @session/sessions))))
