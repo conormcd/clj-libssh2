@@ -1,35 +1,28 @@
 # clj-libssh2
 
-![](https://clojars.org/clj-libssh2/latest-version.svg)
-
-A Clojure wrapper around [libssh2](http://www.libssh2.org/). There are three
-parts to this library:
+A Clojure library for interacting with SSH servers using
+[libssh2](http://www.libssh2.org/) under the hood. There are three parts to
+this library:
 
 1. A small API for doing most common SSH and SCP operations. You should use
-   this for all new code using this library.
+   this for all new code using this library. Examples of usage can be found in
+   [doc/Primary-API.md](https://github.com/conormcd/clj-libssh2/blob/master/doc/Primary-API.md).
 2. A [JNA](https://github.com/Chouser/clojure-jna) wrap of all of the
    functions and constants in the public API of libssh2. You should use this
-   if you need to do something unusual. Please file an issue or PR with
+   if you need to do something unusual. Please [file an
+   issue](https://github.com/conormcd/clj-libssh2/issues) or pull request with
    details of what you end up using this for, so that I can expand the main
-   API.
+   API. Some notes on this API can be found in
+   [doc/libssh2.md](https://github.com/conormcd/clj-libssh2/blob/master/doc/libssh2.md).
 3. A series of convenience functions designed to make this library a suitable
    replacement for [clj-ssh](https://github.com/hugoduncan/clj-ssh). You
    should use this if you're transitioning code from `clj-ssh` to this
    library.
 
-Documentation for the latest release should always be available at:
-http://conormcd.github.io/clj-libssh2/
+Function by function documentation for the latest release should always be
+available at: http://conormcd.github.io/clj-libssh2/
 
-## clj-libssh2 API
-
-The primary public API for this library is the following set of functions:
-
-- `clj-libssh2.ssh/exec` - Execute a command on the remote host.
-- `clj-libssh2.ssh/with-session` - A convenience macro for managing sessions.
-
-### Examples
-
-#### Run a command and get the output.
+## Quick Start
 
 ```clojure
 user=> (require '[clj-libssh2.ssh :as ssh])
@@ -39,70 +32,45 @@ user=> (ssh/exec {:hostname "127.0.0.1"} "uptime")
 :err "", :exit 0, :signal {:exit-signal nil, :err-msg nil, :lang-tag nil}}
 ```
 
-#### Run multiple commands on the same session
+See
+[doc/Primary-API.md](https://github.com/conormcd/clj-libssh2/blob/master/doc/Primary-API.md)
+for more examples.
 
-```clojure
-user=> (require '[clj-libssh2.ssh :as ssh])
-nil
-user=> (ssh/with-session session {:hostname "127.0.0.1"}
-  #_=>   (print (:out (ssh/exec session "uptime")))
-  #_=>   (print (:out (ssh/exec session "date"))))
-18:44  up 155 days, 19:07, 4 users, load averages: 2.17 1.93 1.75
-Sun 17 Jan 2016 18:44:03 GMT
-nil
-```
+## Release information
 
-## libssh2 API
+Releases are done automatically via
+[CircleCI](https://circleci.com/gh/conormcd/clj-libssh2). Release builds can
+be found on [Clojars](https://clojars.org/clj-libssh2) and on
+[GitHub](https://github.com/conormcd/clj-libssh2/releases). Every release tags
+this repository with the version number as well, so commands like `git log
+0.1.69..0.1.72` and `git diff 0.1.69..0.1.72` should be usable to find out
+what's happened between releases.
 
-The namespaces are arranged as follows:
+The latest release is:
 
-- `clj-libssh2.libssh2`
-  - All constant definitions. Constants that started with `LIBSSH2_` have had
-    that prefix removed.
-  - `libssh2_banner_set`
-  - `libssh2_base64_decode`
-  - `libssh2_exit`
-  - `libssh2_free`
-  - `libssh2_hostkey_hash`
-  - `libssh2_init`
-  - `libssh2_poll`
-  - `libssh2_poll_channel_read`
-  - `libssh2_trace`
-  - `libssh2_trace_sethandler`
-  - `libssh2_version`
-- `clj-libssh2.libssh2.agent` - All functions named `libssh2_agent_*`
-- `clj-libssh2.libssh2.channel` - All functions named `libssh2_channel_*`
-- `clj-libssh2.libssh2.keepalive` - All functions named `libssh2_keepalive_*`
-- `clj-libssh2.libssh2.knownhost` - All functions named `libssh2_knownhost_*`
-- `clj-libssh2.libssh2.scp` - All functions named `libssh2_scp_*`
-- `clj-libssh2.libssh2.session` - All functions named `libssh2_session_*`
-- `clj-libssh2.libssh2.userauth` - All functions named `libssh2_userauth_*`
+![](https://clojars.org/clj-libssh2/latest-version.svg)
 
-## clj-ssh API
+Version numbers are structured as follows: MAJOR.MINOR.BUILD-NUMBER. The
+first, major version number will only be incremented for breaking changes to
+the primary public API of this library. The second, minor number will be
+incremented if either there's a backwards-incompatible change in other APIs
+exposed by this library OR if the bundled version of libssh2 changes. The last
+portion is the build number from CircleCI. Only green builds on the `master`
+branch trigger a release so these numbers will be non-sequential and will not
+reset to zero when the major/minor portions are incremented.
 
-TODO. :)
+N.B. All versions before 0.2.x should be considered early development and
+should not be used in production. APIs may be added/changed/removed without
+warning.
 
 ## License
 
-Copyright (c) 2015-2016, Conor McDermottroe
-All rights reserved.
+The majority of this library is released under [a two clause BSD-style
+license](https://github.com/conormcd/clj-libssh2/blob/master/LICENSE). The
+only exceptions to this are the bundled libraries which have their own
+licenses:
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- libsimplesocket - This is distributed under its own [two clause BSD-style
+  license](https://github.com/conormcd/clj-libssh2/blob/master/resources/linux-x86-64/libsimplesocket.so.LICENSE)
+- libssh2 - This is distributed under its own [three clause BSD-style
+  license](https://github.com/conormcd/clj-libssh2/blob/master/resources/linux-x86-64/libssh2.so.COPYING)
