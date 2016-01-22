@@ -1,8 +1,8 @@
 # clj-libssh2
 
 A Clojure library for interacting with SSH servers using
-[libssh2](http://www.libssh2.org/) under the hood. There are three parts to
-this library:
+[libssh2](http://www.libssh2.org/) under the hood. There are two parts to this
+library:
 
 1. A small API for doing most common SSH and SCP operations. You should use
    this for all new code using this library. Examples of usage can be found in
@@ -14,10 +14,6 @@ this library:
    details of what you end up using this for, so that I can expand the main
    API. Some notes on this API can be found in
    [doc/libssh2.md](https://github.com/conormcd/clj-libssh2/blob/master/doc/libssh2.md).
-3. A series of convenience functions designed to make this library a suitable
-   replacement for [clj-ssh](https://github.com/hugoduncan/clj-ssh). You
-   should use this if you're transitioning code from `clj-ssh` to this
-   library.
 
 Function by function documentation for the latest release should always be
 available at: http://conormcd.github.io/clj-libssh2/
