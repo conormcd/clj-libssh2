@@ -104,6 +104,7 @@ launch_sshd() {
           -h "${TMP_DIR}/ssh_host_key" \
           -h "${TMP_DIR}/ssh_host_dsa_key" \
           -h "${TMP_DIR}/ssh_host_rsa_key" \
+          -o "AcceptEnv=*" \
           -o "AuthorizedKeysFile=${TMP_DIR}/authorized_keys" \
           -o "ListenAddress=${host}:${port}"
   SSHD_PID=$(pgrep -f "${TMP_DIR}/ssh_host_dsa_key")
