@@ -138,6 +138,40 @@
   [session channel]
   (block session (handle-errors session (libssh2-channel/send-eof channel))))
 
+(defn setenv
+  "Set a selection of environment variables on the channel. These will be
+   visible to the next exec command. Setting environment variables may be
+   prohibited by the remote sshd based on the value of the AcceptEnv
+   configuration value.
+
+   Arguments:
+
+   channel
+   env      A map where the keys are environment variable names and the values
+            are the values for those environment variables. If either the name
+            or value is a keyword, they will be stringified using the name
+            function. Everything else will be stringified using str. Nil values
+            will be converted to empty strings. For maximum predictability, you
+            should provide a map of String -> String only.
+
+   Return:
+
+   0 on success. Errors will result in exceptions."
+  [session channel env]
+  (let [->str (fn [v]
+                (cond (nil? v) ""
+                      (keyword? v) (name v)
+                      :else (str v)))
+        fail-if-forbidden (fn [ret]
+                            (if (= libssh2/ERROR_CHANNEL_REQUEST_DENIED ret)
+                              (throw (Exception. "Setting environment variables is not permitted."))
+                              ret))]
+    (doseq [[k v] env]
+      (block session
+        (handle-errors session
+          (fail-if-forbidden
+            (libssh2-channel/setenv channel (->str k) (->str v))))))))
+
 (defn pull
   "Read some output from a given stream on a channel.
 

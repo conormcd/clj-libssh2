@@ -65,6 +65,23 @@
           (is (= "" (:err result)))
           (is (= 0 (:exit result))))))))
 
+(deftest exec-can-be-given-environment-variables
+  (testing "Exec can be given environment variables."
+    (ssh/with-session session {:port 2222}
+      (let [env {:FOO "foo" :BAR :bar :BAZ 1 :QUUX nil}
+            result (ssh/exec session "env" :env env)
+            out-env (->> result
+                         :out
+                         str/split-lines
+                         (map #(str/split % #"=" 2))
+                         (into {}))]
+        (is (= "foo" (get out-env "FOO")))
+        (is (= "bar" (get out-env "BAR")))
+        (is (= "1" (get out-env "BAZ")))
+        (is (= "" (get out-env "QUUX")))
+        (is (= "" (:err result)))
+        (is (= 0 (:exit result)))))))
+
 (deftest exec-times-out-when-commands-take-too-long
   (testing "Commands that take too long result in a timeout"
     (is (thrown? Exception (ssh/exec {:port 2222 :read-timeout 500}

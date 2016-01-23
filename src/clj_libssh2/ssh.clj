@@ -50,6 +50,11 @@
         If this is not provided, then the output will be returned as a String.
    :err An OutputStream which will be connected to the standard error of the
         remote process and in every other way behaves like :out.
+   :env A map of environment variables which will be set before the command is
+        executed. The keys are the environment variable names. The values are
+        the values for those variables. The setting of environment variables is
+        controlled by the remote sshd and the value of its AcceptEnv
+        configuration variable.
 
    Return:
 
@@ -78,6 +83,7 @@
           inputs (if stdin {0 stdin} {})
           outputs {0 stdout 1 stderr}]
       (channel/with-channel session channel
+        (channel/setenv session channel (:env io))
         (channel/exec session channel commandline)
         (let [streams (channel/pump session channel inputs outputs)
               out (:stream (get streams 0))
