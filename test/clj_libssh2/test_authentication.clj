@@ -16,7 +16,7 @@
     (session/close session))
   (is (= 0 (count @session/sessions))))
 
-; This is more fully tested in clj-libssh2.test-authentication
+; This is more fully tested in clj-libssh2.test-agent
 (deftest agent-authentication-works
   (is (auth (->AgentCredentials (test/ssh-user)))))
 
@@ -49,10 +49,10 @@
       (is (valid? unauthorized))
       (is (thrown? Exception (auth unauthorized))))
     (testing "It fails if the private key file doesn't exist"
-      (is (not (valid? bad-privkey)))
+      (is (valid? bad-privkey))
       (is (thrown? Exception (auth bad-privkey))))
     (testing "It fails if the public key file doesn't exist"
-      (is (not (valid? bad-pubkey)))
+      (is (valid? bad-pubkey))
       (is (thrown? Exception (auth bad-pubkey))))
     (testing "It fails if the passphrase is incorrect"
       (is (valid? with-wrong-passphrase))
@@ -78,5 +78,5 @@
 (deftest authenticating-with-a-map-fails-if-there's-no-equivalent-record
   (is (thrown-with-msg?
         Exception
-        #"Invalid credentials"
+        #"Failed to determine credentials type"
         (auth {:password "foo"}))))

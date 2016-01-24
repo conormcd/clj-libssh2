@@ -164,7 +164,8 @@
                       :else (str v)))
         fail-if-forbidden (fn [ret]
                             (if (= libssh2/ERROR_CHANNEL_REQUEST_DENIED ret)
-                              (throw (Exception. "Setting environment variables is not permitted."))
+                              (throw (ex-info "Setting environment variables is not permitted."
+                                              {:session session}))
                               ret))]
     (doseq [[k v] env]
       (block session
@@ -322,9 +323,11 @@
       (when (and (= pump-fn pull)
                  (= :eagain new-status)
                  (< (-> session :options :read-timeout) (- now last-read-time)))
-        (throw (Exception. (format "Read timeout for %s stream %d"
-                                   (-> stream :direction name)
-                                   (-> stream :id)))))
+        (throw (ex-info "Read timeout on a channel."
+                        {:direction (-> stream :direction name)
+                         :id (-> stream :id)
+                         :timeout (-> session :options :read-timeout)
+                         :session session})))
       (assoc stream :status new-status :last-read-time now))
     stream))
 

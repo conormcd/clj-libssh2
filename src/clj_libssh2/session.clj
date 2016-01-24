@@ -4,7 +4,7 @@
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
-            [clj-libssh2.error :refer [handle-errors with-timeout]]
+            [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
             [clj-libssh2.known-hosts :as known-hosts]
             [clj-libssh2.socket :as socket]))
 
@@ -37,7 +37,7 @@
   []
   (let [session (libssh2-session/init)]
     (when-not session
-      (throw (Exception. "Failed to create a libssh2 session.")))
+      (error/maybe-throw-error nil libssh2/ERROR_ALLOC))
     session))
 
 (defn- create-session-options
@@ -73,15 +73,15 @@
    nil or throws an exception if requested."
   ([session]
    (destroy-session session "Shutting down normally." false))
-  ([{session :session} reason raise]
+  ([session reason raise]
    (handle-errors nil
     (with-timeout :session
-      (libssh2-session/disconnect session reason)))
+      (libssh2-session/disconnect (:session session) reason)))
    (handle-errors nil
     (with-timeout :session
-      (libssh2-session/free session)))
+      (libssh2-session/free (:session session))))
    (when raise
-     (throw (Exception. reason)))))
+     (throw (ex-info reason {:session session})))))
 
 (defn- handshake
   "Perform the startup handshake with the remote host.
@@ -147,9 +147,9 @@
       (authenticate session credentials)
       (swap! sessions conj session)
       session
-      (catch Exception e
+      (catch Throwable t
         (close session)
-        (throw e)))))
+        (throw t)))))
 
 (defmacro with-session
   "A convenience macro for running some code with a particular session.

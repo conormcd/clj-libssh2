@@ -4,7 +4,8 @@
             [clj-libssh2.agent :as agent]
             [clj-libssh2.error :refer [handle-errors with-timeout]]
             [clj-libssh2.libssh2.userauth :as libssh2-userauth])
-  (:import clojure.lang.PersistentArrayMap))
+  (:import [java.io FileNotFoundException]
+           [clojure.lang PersistentArrayMap]))
 
 (defprotocol Credentials
   "A datatype to represent a way of authentication and the necessary data to
@@ -21,9 +22,7 @@
   (valid? [credentials] (and (some? username)
                              (some? passphrase)
                              (some? private-key)
-                             (some? public-key)
-                             (.exists (file private-key))
-                             (.exists (file public-key)))))
+                             (some? public-key))))
 
 (defrecord PasswordCredentials [username password]
   Credentials
@@ -54,7 +53,7 @@
   [session credentials]
   (doseq [keyfile (map #(% credentials) [:private-key :public-key])]
     (when-not (.exists (file keyfile))
-      (throw (Exception. (format "%s does not exist." keyfile)))))
+      (throw (FileNotFoundException. keyfile))))
   (handle-errors session
     (with-timeout :auth
       (libssh2-userauth/publickey-fromfile (:session session)
@@ -81,4 +80,6 @@
         (authenticate session creds)
         (if (< 1 (count m))
           (recur (rest m))
-          (throw (Exception. "Invalid credentials")))))))
+          (throw (ex-info "Failed to determine credentials type."
+                          {:items (keys credentials)
+                           :session session})))))))

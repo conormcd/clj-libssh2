@@ -29,17 +29,18 @@
                            port)]
     (when (> 0 socket)
       ;; Magic numbers are from libsimplesocket.h
-      (throw (Exception. (condp = socket
-                           SIMPLE_SOCKET_BAD_ADDRESS
-                           (format "%s is not a valid IP address" address)
+      (let [message (condp = socket
+                      SIMPLE_SOCKET_BAD_ADDRESS
+                      (format "%s is not a valid IP address" address)
 
-                           SIMPLE_SOCKET_SOCKET_FAILED
-                           "Failed to create a TCP socket"
+                      SIMPLE_SOCKET_SOCKET_FAILED
+                      "Failed to create a TCP socket"
 
-                           SIMPLE_SOCKET_CONNECT_FAILED
-                           (format "Failed to connect to %s:%d" address port)
+                      SIMPLE_SOCKET_CONNECT_FAILED
+                      (format "Failed to connect to %s:%d" address port)
 
-                           "An unknown error occurred"))))
+                      "simple_socket_connect returned a bad value")]
+        (throw (ex-info message {:socket socket}))))
     socket))
 
 (defn select

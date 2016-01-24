@@ -2,7 +2,7 @@
   "Utilities for checking the fingerprint of a remote machine against a list of
    known hosts."
   (:require [clojure.java.io :refer [file]]
-            [clj-libssh2.error :refer [handle-errors with-timeout]]
+            [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.knownhost :as libssh2-knownhost]
             [clj-libssh2.libssh2.session :as libssh2-session])
@@ -39,7 +39,9 @@
                                         libssh2/ERROR_HOSTKEY_SIGN
                                         0)
     libssh2/KNOWNHOST_CHECK_FAILURE   libssh2/ERROR_HOSTKEY_SIGN
-    (throw (Exception. (format "Unknown return code from libssh2-knownhost/checkp: %d" result)))))
+    (throw (ex-info "Unknown return code from libssh2_knownhost_checkp."
+                    {:function "libssh2_knownhost_checkp"
+                     :return result}))))
 
 (defn- host-fingerprint
   "Get the remote host's fingerprint.
@@ -131,7 +133,7 @@
         fail-on-mismatch (-> session-options :fail-unless-known-hosts-matches)
         fail-on-missing (-> session-options :fail-if-not-in-known-hosts)]
     (when (nil? known-hosts)
-      (throw (Exception. "Failed to initialize known hosts store.")))
+      (error/maybe-throw-error session libssh2/ERROR_ALLOC))
     (try
       (load-known-hosts session known-hosts file)
       (check-fingerprint session

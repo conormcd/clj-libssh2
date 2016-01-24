@@ -2,7 +2,8 @@
   "Functions for interacting with an SSH agent. The agent is expected to be
    available on the UNIX domain socket referred to by the SSH_AUTH_SOCK
    environment variable."
-  (:require [clj-libssh2.error :refer [handle-errors with-timeout]]
+  (:require [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
+            [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.agent :as libssh2-agent])
   (:import [com.sun.jna.ptr PointerByReference]))
 
@@ -32,7 +33,10 @@
     (case ret
       0 (.getValue id)
       1 nil
-      (throw (Exception. "An unknown error occurred")))))
+      (throw (ex-info "libssh2_agent_get_identity returned a bad value."
+                      {:function "libssh2_agent_get_identity"
+                       :return ret
+                       :session session})))))
 
 (defn authenticate
   "Attempt to authenticate a session using the agent.
@@ -50,7 +54,7 @@
   [session username]
   (let [ssh-agent (libssh2-agent/init (:session session))]
     (when (nil? ssh-agent)
-      (throw (Exception. "Failed to initialize agent.")))
+      (error/maybe-throw-error session libssh2/ERROR_ALLOC))
     (try
       (handle-errors session
         (with-timeout :agent
@@ -65,7 +69,9 @@
                                (libssh2-agent/userauth ssh-agent username id)))
                         id)
                       false)))
-        (throw (Exception. "Failed to authenticate with the agent.")))
+        (throw (ex-info "Failed to authenticate using the SSH agent."
+                        {:username username
+                         :session session})))
       true
       (finally
         (handle-errors session

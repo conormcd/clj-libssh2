@@ -109,8 +109,9 @@
    which may be useful to debug the error handling itself:
 
    :error         The error message from error-messages, if any.
-   :session-error The error message from session-error-message, if any.
-   :error-code    The numeric return value."
+   :error-code    The numeric return value.
+   :session       The clj-libssh2.session.Session object, if any.
+   :session-error The error message from session-error-message, if any."
   [session error-code]
   (when (and (some? error-code)
              (> 0 error-code)
@@ -121,8 +122,9 @@
                           default-message
                           (format "An unknown error occurred: %d" error-code))
                       {:error default-message
-                       :session-error session-message
-                       :error-code error-code})))))
+                       :error-code error-code
+                       :session session
+                       :session-error session-message})))))
 
 (defmacro handle-errors
   "Run some code that might return a negative number to indicate an error.
@@ -197,7 +199,9 @@
          timeout# (get-timeout ~timeout)]
      (loop [timedout# false]
        (if timedout#
-         (throw (Exception. "Timeout!"))
+         (throw (ex-info "Timeout exceeded."
+                         {:timeout ~timeout
+                          :timeout-length timeout#}))
          (let [r# (do ~@body)]
            (if (= r# libssh2/ERROR_EAGAIN)
              (recur (< timeout# (- (System/currentTimeMillis) start#)))
