@@ -4,7 +4,7 @@
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
-            [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
+            [clj-libssh2.error :as error :refer [handle-errors]]
             [clj-libssh2.known-hosts :as known-hosts]
             [clj-libssh2.socket :as socket]))
 
@@ -74,12 +74,12 @@
   ([session]
    (destroy-session session "Shutting down normally." false))
   ([session reason raise]
-   (handle-errors nil
-    (with-timeout :session
-      (libssh2-session/disconnect (:session session) reason)))
-   (handle-errors nil
-    (with-timeout :session
-      (libssh2-session/free (:session session))))
+   (socket/block session
+     (handle-errors session
+       (libssh2-session/disconnect (:session session) reason)))
+   (socket/block session
+     (handle-errors session
+       (libssh2-session/free (:session session))))
    (when raise
      (throw (ex-info reason {:session session})))))
 
@@ -93,10 +93,10 @@
    Return:
 
    0 on success. Throws an exception on failure."
-  [{session :session socket :socket :as s}]
-  (handle-errors s
-    (with-timeout :session
-      (libssh2-session/handshake session socket))))
+  [session]
+  (socket/block session
+    (handle-errors session
+      (libssh2-session/handshake (:session session) (:socket session)))))
 
 (defn close
   "Disconnect an SSH session and discard the session.

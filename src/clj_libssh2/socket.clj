@@ -69,32 +69,33 @@
   ([session]
    (wait session (System/currentTimeMillis)))
   ([session start-time]
-   (let [ms-until-next-keepalive (* (send-keepalive session) 1000)
-         block-directions (libssh2-session/block-directions (:session session))
-         block-for-read (boolean (bit-and block-directions libssh2/SESSION_BLOCK_INBOUND))
-         block-for-write (boolean (bit-and block-directions libssh2/SESSION_BLOCK_OUTBOUND))
-         libssh2-timeout-ms (libssh2-session/get-timeout (:session session))
-         select-until (partial select session block-for-read block-for-write)
-         select-result (cond (and (< 0 libssh2-timeout-ms)
-                                  (or (= 0 ms-until-next-keepalive)
-                                      (> ms-until-next-keepalive libssh2-timeout-ms)))
-                             (let [elapsed (- (System/currentTimeMillis) start-time)]
-                               (when (> elapsed libssh2-timeout-ms)
-                                 (handle-errors session libssh2/ERROR_TIMEOUT))
-                               (select-until (- libssh2-timeout-ms elapsed)))
+   (when (and session (:session session) (> 0 (:socket session)))
+     (let [ms-until-next-keepalive (* (send-keepalive session) 1000)
+           block-directions (libssh2-session/block-directions (:session session))
+           block-for-read (boolean (bit-and block-directions libssh2/SESSION_BLOCK_INBOUND))
+           block-for-write (boolean (bit-and block-directions libssh2/SESSION_BLOCK_OUTBOUND))
+           libssh2-timeout-ms (libssh2-session/get-timeout (:session session))
+           select-until (partial select session block-for-read block-for-write)
+           select-result (cond (and (< 0 libssh2-timeout-ms)
+                                    (or (= 0 ms-until-next-keepalive)
+                                        (> ms-until-next-keepalive libssh2-timeout-ms)))
+                               (let [elapsed (- (System/currentTimeMillis) start-time)]
+                                 (when (> elapsed libssh2-timeout-ms)
+                                   (handle-errors session libssh2/ERROR_TIMEOUT))
+                                 (select-until (- libssh2-timeout-ms elapsed)))
 
-                             (< 0 ms-until-next-keepalive)
-                             (select-until ms-until-next-keepalive)
+                               (< 0 ms-until-next-keepalive)
+                               (select-until ms-until-next-keepalive)
 
-                             :else
-                             (select-until 0))]
-     (when (>= 0 select-result)
-       (handle-errors session libssh2/ERROR_TIMEOUT)))))
+                               :else
+                               (select-until 0))]
+       (when (>= 0 select-result)
+         (handle-errors session libssh2/ERROR_TIMEOUT))))))
 
 (defmacro block
   "Turn a non-blocking call that returns EAGAIN into a blocking one."
   [session & body]
-  `(let [start-time# (-> (System/currentTimeMillis) (/ 1000.0) Math/round)]
+  `(let [start-time# (System/currentTimeMillis)]
      (while (= libssh2/ERROR_EAGAIN (do ~@body))
        (handle-errors ~session
          (wait ~session start-time#)))))
@@ -102,7 +103,7 @@
 (defmacro block-return
   "Similar to block, but for functions that return a pointer"
   [session & body]
-  `(let [start-time# (-> (System/currentTimeMillis) (/ 1000.0) Math/round)]
+  `(let [start-time# (System/currentTimeMillis)]
      (loop [result# (do ~@body)]
        (if (nil? result#)
          (let [errno# (libssh2-session/last-errno (:session ~session))]

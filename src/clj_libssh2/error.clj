@@ -11,8 +11,7 @@
    milliseconds for that timeout."
   (atom {:agent 10000
          :auth 10000
-         :known-hosts 10000
-         :session 10000}))
+         :known-hosts 10000}))
 
 (def error-messages
   "All of the error codes that are documented for libssh2 except for
