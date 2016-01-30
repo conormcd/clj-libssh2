@@ -1,12 +1,15 @@
 (ns clj-libssh2.channel
   "Functions for manipulating channels within an SSH session."
+  (:refer-clojure :exclude [read])
   (:require [net.n01se.clojure-jna :as jna]
             [clj-libssh2.error :refer [handle-errors]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.channel :as libssh2-channel]
+            [clj-libssh2.libssh2.scp :as libssh2-scp]
             [clj-libssh2.socket :refer [block block-return wait]])
   (:import [java.io InputStream PushbackInputStream]
-           [com.sun.jna.ptr IntByReference PointerByReference]))
+           [com.sun.jna.ptr IntByReference PointerByReference]
+           [clj_libssh2.struct Stat]))
 
 (defn close
   "Close a channel.
@@ -124,6 +127,49 @@
   [session]
   (block-return session (libssh2-channel/open-session (:session session))))
 
+(defn open-scp-recv
+  "Create a new channel dedicated to receiving a file using SCP.
+
+   Arguments:
+
+   session      The clj-libssh2.session.Session object for the current session.
+   remote-path  The path on the remote machine of the file to receive.
+
+   Return:
+
+   A map containing a newly-allocated channel object and the Stat object for
+   the file information as reported by the remote host. Throws exception on
+   failure."
+  [session remote-path]
+  (let [fileinfo (Stat/newInstance)]
+    {:channel (block-return session
+                (libssh2-scp/recv (:session session) remote-path fileinfo))
+     :fileinfo fileinfo}))
+
+(defn open-scp-send
+  "Create a new channel dedicated to sending a file using SCP.
+
+   Arguments:
+
+   session      The clj-libssh2.session.Session object for the current session.
+   remote-path  The path on the remote machine of the file to send.
+   props        A map with the following keys and values:
+
+                :atime  The last accessed time to be set on the remote file.
+                :mode   The mode that the remote file should have.
+                :mtime  The last modified time to be set on the remote file.
+                :size   The size of the file in bytes.
+
+   Return:
+
+   A newly-allocated channel object for sending a file via SCP."
+  [session remote-path {:keys [atime mode mtime size] :as props}]
+  (let [mode (or mode 0644)
+        mtime (or mtime 0)
+        atime (or atime 0)]
+    (block-return session
+      (libssh2-scp/send64 (:session session) remote-path mode size mtime atime))))
+
 (defn send-eof
   "Tell the remote process that we won't send any more input.
 
@@ -173,10 +219,43 @@
           (fail-if-forbidden
             (libssh2-channel/setenv channel (->str k) (->str v))))))))
 
+(defn read
+  "Attempt to read a chunk of data from a stream on a channel.
+
+   Arguments:
+
+   session       The clj-libssh2.session.Session object for the current
+                 session.
+   channel       A valid channel for this session.
+   ssh-stream-id 0 for STDOUT, 1 for STDERR or any other number that the
+                 process on the other end wishes to send data on.
+   size          The number of bytes to request.
+
+   Return:
+
+   A map with the following keys and values:
+
+   :status    One of :eof, :ready or :eagain depending on whether the stream
+              has reported EOF, has potentially more bytes to read immediately
+              or has no bytes to read right now but might in the future.
+   :received  The number of bytes received.
+   :data      A byte array containing the data which was received."
+  [session channel ssh-stream-id size]
+  (let [buf1 (jna/make-cbuf size)
+        res (handle-errors session
+              (libssh2-channel/read-ex channel ssh-stream-id buf1 size))]
+    (if (< 0 res)
+      (let [buf2 (byte-array res (byte 0))]
+        (.get buf1 buf2 0 res)
+        {:status :ready
+         :received res
+         :data buf2})
+      {:status (if (= libssh2/ERROR_EAGAIN res) :eagain :eof)
+       :received 0
+       :data nil})))
+
 (defn pull
   "Read some output from a given stream on a channel.
-
-   This should probably only be called from pump.
 
    Arguments:
 
@@ -195,22 +274,14 @@
    read immediately."
   [session channel ssh-stream-id output-stream]
   (let [size (-> session :options :read-chunk-size)
-        buf1 (jna/make-cbuf size)
-        res (handle-errors session
-              (libssh2-channel/read-ex channel ssh-stream-id buf1 size))]
-    (when (and (some? output-stream) (< 0 res))
-      (let [buf2 (byte-array size (byte 0))]
-        (.get buf1 buf2 0 res)
-        (.write output-stream buf2 0 res)))
-    (condp = res
-      0 :eof
-      libssh2/ERROR_EAGAIN :eagain
-      :ready)))
+        res (read session channel ssh-stream-id size)
+        {status :status received :received data :data} res]
+    (when (and (some? output-stream) (< 0 received))
+      (.write output-stream data 0 received))
+    status))
 
 (defn push
   "Write some input to a given stream on a channel.
-
-   This should probably only be called from pump.
 
    Arguments:
 
@@ -384,9 +455,56 @@
    session  The clj-libssh2.session.Session object for the current session.
    channel  This will be bound to the result of a call to open."
   [session channel & body]
-  `(let [~channel (open ~session)]
+  `(let [session# ~session
+         ~channel (open session#)]
      (try
        (do ~@body)
        (finally
-         (close ~session ~channel)
-         (free ~session ~channel)))))
+         (close session# ~channel)
+         (free session# ~channel)))))
+
+(defmacro with-scp-recv-channel
+  "A convenience macro like with-channel, but for SCP receive operations.
+
+   Arguments:
+
+   session  The clj-libssh2.session.Session object for the current session.
+   channel  This will be bound to the channel when it's opened.
+   path     The path of the file to receive from the remote machine.
+   fileinfo This will be bound to the Stat struct describing the properties of
+            the remote file."
+  [session channel path fileinfo & body]
+  `(let [session# ~session
+         {~channel :channel ~fileinfo :fileinfo} (open-scp-recv session# ~path)]
+     (try
+       (do ~@body)
+       (finally
+         (close session# ~channel)
+         (free session# ~channel)))))
+
+(defmacro with-scp-send-channel
+  "A convenience macro like with-channel, but for sending files using SCP.
+
+   Arguments:
+
+   session  The clj-libssh2.session.Session object for the current session.
+   channel  This will be bound to the channel when it's opened.
+   path     The path where the file should be places on the remote machine.
+   props    A map describing the properties which should be applied to the
+            file when it's transferred to the other side. The keys and values
+            are as follows:
+
+            :atime  The last accessed time to be set on the remote file.
+            :mode   The mode that the remote file should have.
+            :mtime  The last modified time to be set on the remote file.
+            :size   The size of the file in bytes."
+  [session channel path props & body]
+  `(let [session# ~session
+         path# ~path
+         props# ~props
+         ~channel (open-scp-send session# path# props#)]
+     (try
+       (do ~@body)
+       (finally
+         (close session# ~channel)
+         (free session# ~channel)))))
