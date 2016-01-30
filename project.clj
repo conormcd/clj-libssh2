@@ -4,6 +4,7 @@
   :license {:name "BSD"
             :url "https://github.com/conormcd/clj-libssh2/blob/master/LICENSE"}
   :pedantic? :abort
+  :java-source-paths ["src-java"]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [net.n01se/clojure-jna "1.0.0"]]
   :profiles {:dev {:plugins [[lein-codox "0.9.1"]]}}
