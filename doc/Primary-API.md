@@ -3,6 +3,8 @@
 The primary public API for this library is the following set of functions:
 
 - `clj-libssh2.ssh/exec` - Execute a command on the remote host.
+- `clj-libssh2.ssh/scp-from` - SCP a file from the remote host.
+- `clj-libssh2.ssh/scp-to` - SCP a file to the remote host.
 - `clj-libssh2.ssh/with-session` - A convenience macro for managing sessions.
 
 If there are any breaking changes to the above-named functions after version
@@ -43,4 +45,26 @@ user=> (ssh/exec {:hostname "127.0.0.1"}
   #_=>           :in "foo\nbar\n")
 {:out "foo\nbar\n", :err "", :exit 0, :signal {:exit-signal nil, :err-msg nil,
 :lang-tag nil}}
+```
+
+### Copy a file from a remote machine.
+
+```clojure
+user=> (require '[clj-libssh2.ssh :as ssh])
+nil
+user=> (ssh/scp-from {:hostname "127.0.0.1"} "/home/conor/.vimrc" ".vimrc")
+{:local-path ".vimrc", :remote-path "/home/conor/.vimrc", :size 4525,
+:remote-stat {:atime #object[java.time.Instant 0x3fc52110
+"2016-01-30T23:16:16Z"], :ctime #object[java.time.Instant 0x6de7c794
+"1970-01-01T00:00:00Z"], :gid 0, :mode 420, :mtime #object[java.time.Instant
+0x3e81f5e4 "2016-01-30T17:58:11Z"], :size 4525, :uid 0}}
+```
+
+### Send a file to a remote machine.
+
+```clojure
+user=> (require '[clj-libssh2.ssh :as ssh])
+nil
+user=> (ssh/scp-to {:hostname "127.0.0.1"} "/home/conor/.vimrc" "/tmp/.vimrc")
+nil
 ```
