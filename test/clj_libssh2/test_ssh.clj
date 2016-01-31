@@ -1,5 +1,6 @@
 (ns clj-libssh2.test-ssh
-  (:require [clojure.string :as str]
+  (:require [clojure.java.io :refer [file]]
+            [clojure.string :as str]
             [clojure.test :refer :all]
             [clj-libssh2.ssh :as ssh]
             [clj-libssh2.test-utils :as test]))
@@ -86,3 +87,53 @@
   (testing "Commands that take too long result in a timeout"
     (is (thrown? Exception (ssh/exec {:port 2222 :read-timeout 500}
                                      "echo foo; sleep 1; echo bar")))))
+
+(deftest scp-from-can-copy-files
+  (testing "scp-from can copy files from the remote host"
+    (let [tmpdir (System/getProperty "java.io.tmpdir")
+          remote-path (str tmpdir "/" (name (gensym "source")))
+          local-path (str tmpdir "/" (name (gensym "destination")))
+          file-content "Some dummy content\nfor the test file.\n"
+          exists? (fn [path]
+                    (.exists (file path)))]
+      (is (not (exists? remote-path)))
+      (is (not (exists? local-path)))
+      (try
+        (spit remote-path file-content)
+        (is (exists? remote-path))
+        (ssh/scp-from {:port 2222} remote-path local-path)
+        (is (exists? local-path))
+        (is (= file-content (slurp local-path)))
+        (finally
+          (.delete (file remote-path))
+          (.delete (file local-path)))))))
+
+(deftest scp-from-throws-when-the-remote-file-doesn't-exist
+  (is (thrown? Exception (ssh/scp-from {:port 2222}
+                                       "/does/not/exist"
+                                       "/dev/null"))))
+
+(deftest scp-to-can-copy-files
+  (testing "scp-to can copy files to the remote host"
+    (let [tmpdir (System/getProperty "java.io.tmpdir")
+          local-path (str tmpdir "/" (name (gensym "source")))
+          remote-path (str tmpdir "/" (name (gensym "destination")))
+          file-content "Some dummy content\nfor the test file.\n"
+          exists? (fn [path]
+                    (.exists (file path)))]
+      (is (not (exists? remote-path)))
+      (is (not (exists? local-path)))
+      (try
+        (spit local-path file-content)
+        (is (exists? local-path))
+        (ssh/scp-to {:port 2222} local-path remote-path)
+        (is (exists? remote-path))
+        (is (= file-content (slurp remote-path)))
+        (finally
+          (.delete (file remote-path))
+          (.delete (file local-path)))))))
+
+(deftest scp-to-throws-when-the-local-file-doesn't-exist
+  (is (thrown? Exception (ssh/scp-to {:port 2222}
+                                     "/does/not/exist"
+                                     "/dev/null"))))

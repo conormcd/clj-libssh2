@@ -1,7 +1,15 @@
 (ns clj-libssh2.ssh
-  (:require [clj-libssh2.channel :as channel]
-            [clj-libssh2.session :as session])
-  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
+  (:require [clojure.java.io :refer [file]]
+            [clj-libssh2.channel :as channel]
+            [clj-libssh2.libssh2.scp :as libssh2-scp]
+            [clj-libssh2.session :as session]
+            [clj-libssh2.socket :as socket])
+  (:import [java.io ByteArrayInputStream
+                    ByteArrayOutputStream
+                    FileInputStream
+                    FileOutputStream
+                    InputStream
+                    OutputStream]
            [clj_libssh2.session Session]))
 
 (defmacro with-session
@@ -93,3 +101,114 @@
            :err (if (contains? io :err) err (.toString err charset))
            :exit (channel/exit-status channel)
            :signal (channel/exit-signal session channel)})))))
+
+(defn scp-from
+  "Retrieve a file from a remote machine using SCP.
+
+   Arguments:
+
+   session-or-host  Either a valid clj-libssh2.session.Session object or a map
+                    suitable for handing off to with-session.
+   remote-path      The path on the remote machine of the file you wish to
+                    retrieve.
+   local-path       The location on the local machine where the file should be
+                    copied to.
+
+   Return:
+
+   A map with the following keys and values:
+
+   :local-path  The local-path argument.
+   :remote-path The remote-path argument.
+   :size        The size of the file as read.
+   :remote-stat A map with the following keys and values, corresponding to the
+                fields in a struct stat as reported by the remote host:
+
+                :atime  The last access time of the remote file.
+                :ctime  The last time the remote file's metadata changed.
+                :gid    The group ID of the remote file.
+                :mode   The permission mask for the remote file.
+                :mtime  The last modified time for the remote file.
+                :size   The size of the file on the remote system.
+                :uid    The user ID of the remote file.
+
+   Note 1:  The destination file at local-path _may_ exist even after this
+            function throws an exception. It's up to the caller to handle
+            partial downloads.
+   Note 2:  Given a return map `m` (-> m :size) and (-> m :remote-stat :size)
+            should be equal. If they are not equal then steps should be taken
+            to verify the download."
+  [session-or-host remote-path local-path]
+  (with-session session session-or-host
+    (channel/with-scp-recv-channel session channel remote-path fileinfo
+      (let [output (FileOutputStream. local-path)
+            file-size (.getSize fileinfo)
+            read-chunk-size (-> session :options :read-chunk-size)
+            read-timeout (-> session :options :read-timeout)
+            finish (fn [bytes-read]
+                     (.close output)
+                     {:local-path local-path
+                      :remote-path remote-path
+                      :size bytes-read
+                      :remote-stat {:atime (.getATime fileinfo)
+                                    :ctime (.getCTime fileinfo)
+                                    :gid (.getGroupID fileinfo)
+                                    :mode (.getMode fileinfo)
+                                    :mtime (.getMTime fileinfo)
+                                    :size file-size
+                                    :uid (.getUserID fileinfo)}})]
+        (loop [bytes-read 0
+               last-read (System/currentTimeMillis)]
+          (when (< read-timeout (- (System/currentTimeMillis) last-read))
+            (throw (ex-info "Read timeout while receiving file"
+                            {:remote-path remote-path
+                             :local-path local-path
+                             :bytes-read bytes-read
+                             :timeout read-timeout
+                             :session session})))
+          (if (< bytes-read file-size)
+            (let [read-size (min (- file-size bytes-read) read-chunk-size)
+                  res (channel/read session channel 0 read-size)
+                  status (:status res)
+                  received (:received res)
+                  data (:data res)]
+              (if (not= :eof status)
+                (do
+                  (when (< 0 received)
+                    (.write output data 0 received))
+                  (when (= :eagain status)
+                    (socket/wait))
+                  (recur (+ bytes-read received) (System/currentTimeMillis)))
+                (finish (+ bytes-read received))))
+            (finish bytes-read)))))))
+
+(defn scp-to
+  "Send a file to a remote machine using SCP.
+
+   Arguments:
+
+   session-or-host  Either a valid clj-libssh2.session.Session object or a map
+                    suitable for handing off to with-session.
+   local-path       The location on the local machine where the file should be
+                    copied from.
+   remote-path      The path on the remote machine where the file should be
+                    placed.
+
+   Optional keyword arguments:
+
+   :atime The last access time which the remote file should have.
+   :mode  The permissions mask which should be applied to the remote file.
+   :mtime The last modified time which the remote file should have.
+
+   Returns:
+
+   nil"
+  [session-or-host local-path remote-path & {:keys [atime mode mtime]
+                                             :as props}]
+  (with-session session session-or-host
+    (let [local-file (file local-path)
+          input (FileInputStream. local-file)
+          props (merge {:size (.length local-file)
+                        :mtime (.lastModified local-file)} props)]
+      (channel/with-scp-send-channel session channel remote-path props
+        (channel/pump session channel {0 input} {})))))
