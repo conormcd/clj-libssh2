@@ -18,7 +18,8 @@
 (def default-opts
   "The default options for a session. These are not only the defaults, but an
    exhaustive list of the legal options."
-  {:character-set "UTF-8"
+  {:blocking-timeout 60000
+   :character-set "UTF-8"
    :fail-if-not-in-known-hosts false
    :fail-unless-known-hosts-matches true
    :known-hosts-file nil

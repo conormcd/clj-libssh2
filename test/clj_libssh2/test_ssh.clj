@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.test :refer :all]
             [clj-libssh2.ssh :as ssh]
-            [clj-libssh2.test-utils :as test]))
+            [clj-libssh2.test-utils :as test])
+  (:import [java.io OutputStream]))
 
 (test/fixtures)
 
@@ -86,7 +87,36 @@
 (deftest exec-times-out-when-commands-take-too-long
   (testing "Commands that take too long result in a timeout"
     (is (thrown? Exception (ssh/exec {:port 2222 :read-timeout 500}
-                                     "echo foo; sleep 1; echo bar")))))
+                                     "echo foo; sleep 1; echo bar"))))
+  (testing "Commands that are blocking on input time out correctly"
+    (test/with-temp-file tempfile
+      (let [output (atom [])
+            streaming-reader (proxy [OutputStream] []
+                               (write [b off len]
+                                 (swap! output conj (String. b off len))))
+            run-exec (future
+                       (try
+                         (ssh/exec {:port 2222
+                                    :read-timeout 5000}
+                                   (str "tail -F " tempfile)
+                                   :out streaming-reader)
+                         (catch Throwable t t)))]
+        ; Output starts off empty
+        (is (empty? @output))
+
+        ; We put some content into the file we're tailing.
+        (spit tempfile "Here is some output!\n" :append true)
+
+        ; We wait for it to turn up on the far side.
+        (let [start-time (System/currentTimeMillis)]
+          (while (and (empty? @output)
+                      (> 5000 (- (System/currentTimeMillis) start-time)))
+            (Thread/sleep 10)))
+
+        ; Now there should be output and (once the exec finishes) an exception.
+        (is (= ["Here is some output!\n"] @output))
+        (is (instance? Throwable @run-exec))
+        (is (= "Timed out." (:error (ex-data @run-exec))))))))
 
 (deftest scp-from-can-copy-files
   (testing "scp-from can copy files from the remote host"
