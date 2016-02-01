@@ -1,7 +1,8 @@
 (ns clj-libssh2.error
   "Utility functions for making error handling easier when calling native
    functions."
-  (:require [clj-libssh2.libssh2 :as libssh2]
+  (:require [clojure.tools.logging :as log]
+            [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session])
   (:import [com.sun.jna.ptr IntByReference PointerByReference]))
 
@@ -65,6 +66,31 @@
    libssh2/ERROR_BAD_SOCKET "Bad socket."
    libssh2/ERROR_KNOWN_HOSTS "Failed to parse known hosts file."})
 
+(defmacro raise
+  "Log an error and then throw an exception with the same error message and
+   optionally some additional information.
+
+   Arguments:
+
+   message          The message to be logged. This will also be the primary
+                    message of the exception. If this message is a Throwable,
+                    then the additional information will be discarded and the
+                    passed-in Throwable will be rethrown after it's logged.
+   additional-info  A map of additional information which might be useful to
+                    anyone debugging an error reported by this exception."
+  ([message]
+   `(raise ~message {}))
+  ([message additional-info]
+   `(let [message# ~message
+          additional-info# ~additional-info]
+      (try
+        (throw (if (instance? Throwable message#)
+                 message#
+                 (ex-info message# additional-info#)))
+        (catch Exception e#
+          (log/log :error e# (.getMessage e#))
+          (throw e#))))))
+
 (defn session-error-message
   "Call libssh2_session_last_error and return the error message given or nil if
    there was no error.
@@ -117,13 +143,13 @@
              (not= libssh2/ERROR_EAGAIN error-code))
     (let [session-message (session-error-message session)
           default-message (get error-messages error-code)]
-      (throw (ex-info (or session-message
-                          default-message
-                          (format "An unknown error occurred: %d" error-code))
-                      {:error default-message
-                       :error-code error-code
-                       :session session
-                       :session-error session-message})))))
+      (raise (or session-message
+                 default-message
+                 (format "An unknown error occurred: %d" error-code))
+             {:error default-message
+              :error-code error-code
+              :session session
+              :session-error session-message}))))
 
 (defmacro handle-errors
   "Run some code that might return a negative number to indicate an error.
@@ -198,9 +224,9 @@
          timeout# (get-timeout ~timeout)]
      (loop [timedout# false]
        (if timedout#
-         (throw (ex-info "Timeout exceeded."
-                         {:timeout ~timeout
-                          :timeout-length timeout#}))
+         (raise (format "Timeout of %d ms exceeded" timeout#)
+                {:timeout ~timeout
+                 :timeout-length timeout#})
          (let [r# (do ~@body)]
            (if (= r# libssh2/ERROR_EAGAIN)
              (recur (< timeout# (- (System/currentTimeMillis) start#)))

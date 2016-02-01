@@ -1,6 +1,7 @@
 (ns clj-libssh2.session
   "Functions for creating and managing sessions."
   (:require [clojure.set :as set]
+            [clojure.tools.logging :as log]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.session :as libssh2-session]
             [clj-libssh2.authentication :refer [authenticate]]
@@ -74,6 +75,7 @@
   ([session]
    (destroy-session session "Shutting down normally." false))
   ([session reason raise]
+   (log/info "Tearing down the session.")
    (socket/block session
      (handle-errors session
        (libssh2-session/disconnect (:session session) reason)))
@@ -81,7 +83,7 @@
      (handle-errors session
        (libssh2-session/free (:session session))))
    (when raise
-     (throw (ex-info reason {:session session})))))
+     (error/raise reason {:session session}))))
 
 (defn- handshake
   "Perform the startup handshake with the remote host.
@@ -94,6 +96,7 @@
 
    0 on success. Throws an exception on failure."
   [session]
+  (log/info "Handshaking with the remote host.")
   (socket/block session
     (handle-errors session
       (libssh2-session/handshake (:session session) (:socket session)))))
@@ -110,6 +113,7 @@
    nil."
   [session]
   (when (contains? @sessions session)
+    (log/info "Closing session.")
     (destroy-session session)
     (socket/close (:socket session))
     (swap! sessions set/difference #{session})
@@ -131,6 +135,7 @@
 
    A Session object for the connected and authenticated session."
   [host port credentials opts]
+  (log/info "Starting new session.")
   (when (empty? @sessions)
     (handle-errors nil (libssh2/init 0)))
   (let [session (Session. (create-session)
@@ -149,7 +154,7 @@
       session
       (catch Throwable t
         (close session)
-        (throw t)))))
+        (error/raise t)))))
 
 (defmacro with-session
   "A convenience macro for running some code with a particular session.

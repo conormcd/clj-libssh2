@@ -1,6 +1,7 @@
 (ns clj-libssh2.socket
-  (:require [net.n01se.clojure-jna :as jna]
-            [clj-libssh2.error :refer [handle-errors]]
+  (:require [clojure.tools.logging :as log]
+            [net.n01se.clojure-jna :as jna]
+            [clj-libssh2.error :as error :refer [handle-errors]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.keepalive :as libssh2-keepalive]
             [clj-libssh2.libssh2.session :as libssh2-session])
@@ -40,12 +41,13 @@
                       (format "Failed to connect to %s:%d" address port)
 
                       "simple_socket_connect returned a bad value")]
-        (throw (ex-info message {:socket socket}))))
+        (error/raise message {:socket socket})))
     socket))
 
 (defn select
   "Call select on a socket from a clj-libssh2 Session."
   [session select-read select-write timeout]
+  (log/debug "Calling select() on the socket.")
   (jna/invoke Integer
               simplesocket/simple_socket_select
               (:socket session)
@@ -58,6 +60,7 @@
   "Send a keepalive message and return the number of seconds until the next
    time we should send a keepalive."
   [session]
+  (log/debug "Sending a keepalive.")
   (let [seconds-to-wait (IntByReference.)]
     (handle-errors session
       (libssh2-keepalive/send (:session session) seconds-to-wait))

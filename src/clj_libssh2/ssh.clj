@@ -1,6 +1,8 @@
 (ns clj-libssh2.ssh
   (:require [clojure.java.io :refer [file]]
+            [clojure.tools.logging :as log]
             [clj-libssh2.channel :as channel]
+            [clj-libssh2.error :as error]
             [clj-libssh2.libssh2.scp :as libssh2-scp]
             [clj-libssh2.session :as session]
             [clj-libssh2.socket :as socket])
@@ -79,6 +81,7 @@
             the values from the similarly-named out arguments of
             libssh2_channel_get_exit_signal."
   [session-or-host commandline & {:as io}]
+  (log/info "Begin ssh/exec")
   (with-session session session-or-host
     (let [charset (-> session :options :character-set)
           stdin (if (contains? io :in)
@@ -139,6 +142,7 @@
             should be equal. If they are not equal then steps should be taken
             to verify the download."
   [session-or-host remote-path local-path]
+  (log/info "Begin ssh/scp-from")
   (with-session session session-or-host
     (channel/with-scp-recv-channel session channel remote-path fileinfo
       (let [output (FileOutputStream. local-path)
@@ -160,12 +164,12 @@
         (loop [bytes-read 0
                last-read (System/currentTimeMillis)]
           (when (< read-timeout (- (System/currentTimeMillis) last-read))
-            (throw (ex-info "Read timeout while receiving file"
-                            {:remote-path remote-path
-                             :local-path local-path
-                             :bytes-read bytes-read
-                             :timeout read-timeout
-                             :session session})))
+            (error/raise "Read timeout while receiving file"
+                         {:remote-path remote-path
+                          :local-path local-path
+                          :bytes-read bytes-read
+                          :timeout read-timeout
+                          :session session}))
           (if (< bytes-read file-size)
             (let [read-size (min (- file-size bytes-read) read-chunk-size)
                   res (channel/read session channel 0 read-size)
@@ -205,6 +209,7 @@
    nil"
   [session-or-host local-path remote-path & {:keys [atime mode mtime]
                                              :as props}]
+  (log/info "Begin ssh/scp-to")
   (with-session session session-or-host
     (let [local-file (file local-path)
           input (FileInputStream. local-file)

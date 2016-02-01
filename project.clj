@@ -7,6 +7,7 @@
   :java-source-paths ["src-java"]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/tools.logging "0.3.1"]
+                 [digest "1.4.4"]
                  [net.n01se/clojure-jna "1.0.0"]
                  [robert/hooke "1.3.0"]]
   :profiles {:dev {:plugins [[lein-codox "0.9.1"]]}
