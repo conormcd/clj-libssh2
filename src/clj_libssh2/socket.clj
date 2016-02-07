@@ -98,20 +98,22 @@
 (defmacro block
   "Turn a non-blocking call that returns EAGAIN into a blocking one."
   [session & body]
-  `(let [start-time# (System/currentTimeMillis)]
+  `(let [session# ~session
+         start-time# (System/currentTimeMillis)]
      (while (= libssh2/ERROR_EAGAIN (do ~@body))
-       (handle-errors ~session
-         (wait ~session start-time#)))))
+       (handle-errors session#
+         (wait session# start-time#)))))
 
 (defmacro block-return
   "Similar to block, but for functions that return a pointer"
   [session & body]
-  `(let [start-time# (System/currentTimeMillis)]
+  `(let [session# ~session
+         start-time# (System/currentTimeMillis)]
      (loop [result# (do ~@body)]
        (if (nil? result#)
-         (let [errno# (libssh2-session/last-errno (:session ~session))]
-           (handle-errors ~session errno#)
+         (let [errno# (libssh2-session/last-errno (:session session#))]
+           (handle-errors session# errno#)
            (when (= libssh2/ERROR_EAGAIN errno#)
-             (wait ~session start-time#))
+             (wait session# start-time#))
            (recur (do ~@body)))
          result#))))

@@ -166,10 +166,11 @@
                   default-opts) plus :hostname, :port and :credentials which
                   will be passed as the first three arguments to open."
   [session session-params & body]
-  `(let [~session (open (:hostname ~session-params)
-                        (:port ~session-params)
-                        (:credentials ~session-params)
-                        (dissoc ~session-params :hostname :port :credentials))]
+  `(let [session-params# ~session-params
+         ~session (open (:hostname session-params#)
+                        (:port session-params#)
+                        (:credentials session-params#)
+                        (dissoc session-params# :hostname :port :credentials))]
      (try
        (do ~@body)
        (finally

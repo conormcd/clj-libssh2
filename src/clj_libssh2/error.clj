@@ -167,8 +167,9 @@
    (but not equal to LIBSSH2_ERROR_EAGAIN). In those cases an exception will be
    thrown using maybe-throw-error."
   [session & body]
-  `(let [res# (do ~@body)]
-     (maybe-throw-error (:session ~session) res#)
+  `(let [session# ~session
+         res# (do ~@body)]
+     (maybe-throw-error (:session session#) res#)
      res#))
 
 (defn get-timeout

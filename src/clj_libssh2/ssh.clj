@@ -25,14 +25,15 @@
                     describing a potential session (in which case this calls
                     clj-libssh2.session/with-session to create the session)."
   [session session-or-host & body]
-  `(if (instance? Session ~session-or-host)
-     (let [~session ~session-or-host]
-       (do ~@body))
-     (let [defaults# {:hostname "127.0.0.1"
-                      :port 22
-                      :credentials {:username (System/getProperty "user.name")}}]
-       (session/with-session ~session (merge defaults# ~session-or-host)
-         (do ~@body)))))
+  `(let [session-or-host# ~session-or-host]
+     (if (instance? Session session-or-host#)
+       (let [~session session-or-host#]
+         (do ~@body))
+       (let [defaults# {:hostname "127.0.0.1"
+                        :port 22
+                        :credentials {:username (System/getProperty "user.name")}}]
+         (session/with-session ~session (merge defaults# session-or-host#)
+           (do ~@body))))))
 
 (defn exec
   "Execute a command and get the results.
