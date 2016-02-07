@@ -2,7 +2,8 @@
   (:require [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clojure.test :as test]
-            [net.n01se.clojure-jna :as jna]))
+            [net.n01se.clojure-jna :as jna]
+            [clj-libssh2.logging :as logging]))
 
 (def ssh-host "127.0.0.1")
 (def ssh-port 2222)
@@ -50,6 +51,13 @@
   (f)
   (teardown))
 
+(defn with-really-verbose-logging
+  [f]
+  (logging/init)
+  (f))
+
 (defn fixtures
   []
-  (test/use-fixtures :once with-sandbox-sshd))
+  (test/use-fixtures :once (test/join-fixtures
+                             [with-sandbox-sshd
+                              with-really-verbose-logging])))

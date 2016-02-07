@@ -1,8 +1,9 @@
 (ns clj-libssh2.channel
   "Functions for manipulating channels within an SSH session."
   (:refer-clojure :exclude [read])
-  (:require [net.n01se.clojure-jna :as jna]
-            [clj-libssh2.error :refer [handle-errors]]
+  (:require [clojure.tools.logging :as log]
+            [net.n01se.clojure-jna :as jna]
+            [clj-libssh2.error :as error :refer [handle-errors]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.channel :as libssh2-channel]
             [clj-libssh2.libssh2.scp :as libssh2-scp]
@@ -23,6 +24,7 @@
 
    0 on success. An exception will be thrown if an error occurs."
   [session channel]
+  (log/info "Closing channel.")
   (block session
     (handle-errors session (libssh2-channel/close channel))))
 
@@ -41,6 +43,7 @@
 
    0 on success. An exception will be thrown if an error occurs."
   [session channel commandline]
+  (log/info "Executing a command on the remote host.")
   (block session
     (handle-errors session (libssh2-channel/exec channel commandline))))
 
@@ -63,6 +66,7 @@
    :err-msg     The error message.
    :lang-tag    The language tag, if provided."
   [session channel]
+  (log/info "Collecting the exit signal data from the remote host.")
   (let [->str (fn [string-ref length-ref]
                 (let [string (.getValue string-ref)
                       length (.getValue length-ref)]
@@ -97,6 +101,7 @@
 
    The numeric exit code from the remote process."
   [channel]
+  (log/info "Collecting the exit code from the remote process.")
   (libssh2-channel/get-exit-status channel))
 
 (defn free
@@ -125,6 +130,7 @@
 
    A newly-allocated channel object, or throws exception on failure."
   [session]
+  (log/info "Opening a new channel.")
   (block-return session (libssh2-channel/open-session (:session session))))
 
 (defn open-scp-recv
@@ -141,6 +147,7 @@
    the file information as reported by the remote host. Throws exception on
    failure."
   [session remote-path]
+  (log/info "Opening a new channel to receive a file using SCP.")
   (let [fileinfo (Stat/newInstance)]
     {:channel (block-return session
                 (libssh2-scp/recv (:session session) remote-path fileinfo))
@@ -164,6 +171,7 @@
 
    A newly-allocated channel object for sending a file via SCP."
   [session remote-path {:keys [atime mode mtime size] :as props}]
+  (log/info "Opening a new channel to send a file using SCP.")
   (let [mode (or mode 0644)
         mtime (or mtime 0)
         atime (or atime 0)]
@@ -182,6 +190,7 @@
 
    0 on success, throws an exception on failure."
   [session channel]
+  (log/info "Notifying the remote host of EOF")
   (block session (handle-errors session (libssh2-channel/send-eof channel))))
 
 (defn setenv
@@ -204,14 +213,15 @@
 
    0 on success. Errors will result in exceptions."
   [session channel env]
+  (log/info "Setting environment variables on the remote host.")
   (let [->str (fn [v]
                 (cond (nil? v) ""
                       (keyword? v) (name v)
                       :else (str v)))
         fail-if-forbidden (fn [ret]
                             (if (= libssh2/ERROR_CHANNEL_REQUEST_DENIED ret)
-                              (throw (ex-info "Setting environment variables is not permitted."
-                                              {:session session}))
+                              (error/raise "Setting environment variables is not permitted."
+                                           {:session session})
                               ret))]
     (doseq [[k v] env]
       (block session
@@ -394,11 +404,11 @@
       (when (and (= pump-fn pull)
                  (= :eagain new-status)
                  (< (-> session :options :read-timeout) (- now last-read-time)))
-        (throw (ex-info "Read timeout on a channel."
-                        {:direction (-> stream :direction name)
-                         :id (-> stream :id)
-                         :timeout (-> session :options :read-timeout)
-                         :session session})))
+        (error/raise "Read timeout on a channel."
+                     {:direction (-> stream :direction name)
+                      :id (-> stream :id)
+                      :timeout (-> session :options :read-timeout)
+                      :session session}))
       (assoc stream :status new-status :last-read-time now))
     stream))
 
@@ -427,6 +437,7 @@
    :status          Always :eof
    :stream          The OutputStream object connected to the SSH stream."
   [session channel input-streams output-streams]
+  (log/info "Pumping all the streams on a channel.")
   (let [now (System/currentTimeMillis)
         write-size (-> session :options :write-chunk-size)
         streams (concat (->> input-streams

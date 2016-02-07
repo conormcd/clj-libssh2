@@ -60,7 +60,7 @@
           (is (= 0 (:exit result)))))
       (testing "Commands can be given a lot of input on STDIN"
         (let [input-line (str (str/join "" (repeat 1024 "x")) "\n")
-              input (str/join "" (repeat (* 10 1024) input-line))
+              input (str/join "" (repeat 1024 input-line))
               result (ssh/exec session timeout-cat :in input)]
           (is (= (count input) (count (:out result))))
           (is (= "" (:err result)))

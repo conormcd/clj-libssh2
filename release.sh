@@ -80,6 +80,8 @@ build_jars() {
 
 save_artifacts() {
   if [ -n "${CIRCLE_ARTIFACTS:-}" ]; then
+    echo "Saving debug log..."
+    cp test/debug.log "${CIRCLE_ARTIFACTS}"
     echo "Copying JARs to CircleCI artifacts..."
     find . -name '*.jar' -exec cp {} "${CIRCLE_ARTIFACTS}" \;
   fi

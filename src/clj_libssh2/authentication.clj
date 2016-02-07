@@ -1,8 +1,9 @@
 (ns clj-libssh2.authentication
   "Authenticate a session."
   (:require [clojure.java.io :refer [file]]
+            [clojure.tools.logging :as log]
             [clj-libssh2.agent :as agent]
-            [clj-libssh2.error :refer [handle-errors with-timeout]]
+            [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
             [clj-libssh2.libssh2.userauth :as libssh2-userauth])
   (:import [java.io FileNotFoundException]
            [clojure.lang PersistentArrayMap]))
@@ -47,13 +48,15 @@
 
 (defmethod authenticate AgentCredentials
   [session credentials]
+  (log/info "Authenticating using an SSH agent.")
   (agent/authenticate session (:username credentials)))
 
 (defmethod authenticate KeyCredentials
   [session credentials]
+  (log/info "Authenticating using a keypair.")
   (doseq [keyfile (map #(% credentials) [:private-key :public-key])]
     (when-not (.exists (file keyfile))
-      (throw (FileNotFoundException. keyfile))))
+      (error/raise (FileNotFoundException. keyfile))))
   (handle-errors session
     (with-timeout :auth
       (libssh2-userauth/publickey-fromfile (:session session)
@@ -65,6 +68,7 @@
 
 (defmethod authenticate PasswordCredentials
   [session credentials]
+  (log/info "Authenticating using a username and password.")
   (handle-errors session
     (with-timeout :auth
       (libssh2-userauth/password (:session session)
@@ -74,12 +78,13 @@
 
 (defmethod authenticate PersistentArrayMap
   [session credentials]
+  (log/info "Deriving correct credential type from a map...")
   (loop [m [map->KeyCredentials map->PasswordCredentials map->AgentCredentials]]
     (let [creds ((first m) credentials)]
       (if (valid? creds)
         (authenticate session creds)
         (if (< 1 (count m))
           (recur (rest m))
-          (throw (ex-info "Failed to determine credentials type."
-                          {:items (keys credentials)
-                           :session session})))))))
+          (error/raise "Failed to determine credentials type."
+                       {:items (keys credentials)
+                        :session session}))))))

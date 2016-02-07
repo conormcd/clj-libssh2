@@ -2,7 +2,8 @@
   "Functions for interacting with an SSH agent. The agent is expected to be
    available on the UNIX domain socket referred to by the SSH_AUTH_SOCK
    environment variable."
-  (:require [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
+  (:require [clojure.tools.logging :as log]
+            [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.agent :as libssh2-agent])
   (:import [com.sun.jna.ptr PointerByReference]))
@@ -33,10 +34,10 @@
     (case ret
       0 (.getValue id)
       1 nil
-      (throw (ex-info "libssh2_agent_get_identity returned a bad value."
-                      {:function "libssh2_agent_get_identity"
-                       :return ret
-                       :session session})))))
+      (error/raise "libssh2_agent_get_identity returned a bad value."
+                   {:function "libssh2_agent_get_identity"
+                    :return ret
+                    :session session}))))
 
 (defn authenticate
   "Attempt to authenticate a session using the agent.
@@ -56,25 +57,25 @@
     (when (nil? ssh-agent)
       (error/maybe-throw-error session libssh2/ERROR_ALLOC))
     (try
+      (log/info "Connecting to the SSH agent...")
       (handle-errors session
         (with-timeout :agent
           (libssh2-agent/connect ssh-agent)))
-      (when-not (loop [success false
-                       previous nil]
-                  (if success
-                    success
-                    (if-let [id (get-identity session ssh-agent previous)]
-                      (recur
-                        (= 0 (with-timeout :agent
-                               (libssh2-agent/userauth ssh-agent username id)))
-                        id)
-                      false)))
-        (throw (ex-info "Failed to authenticate using the SSH agent."
-                        {:username username
-                         :session session})))
+      (when (loop [previous nil]
+              (log/info "Fetching an ID to authenticate with...")
+              (if-let [id (get-identity session ssh-agent previous)]
+                (when-not (= 0 (with-timeout :agent
+                                 (libssh2-agent/userauth ssh-agent username id)))
+                  (recur id))
+                :fail))
+        (error/raise "Failed to authenticate using the SSH agent."
+                     {:username username
+                      :session session}))
+      (log/info "Successfully authenticated using the SSH agent.")
       true
       (finally
         (handle-errors session
           (with-timeout :agent
+            (log/info "Disconnecting from the agent...")
             (libssh2-agent/disconnect ssh-agent)))
         (libssh2-agent/free ssh-agent)))))

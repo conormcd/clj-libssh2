@@ -1,7 +1,10 @@
 (ns clj-libssh2.known-hosts
-  "Utilities for checking the fingerprint of a remote machine against a list of
+  "Utilities for checking the host key of a remote machine against a list of
    known hosts."
   (:require [clojure.java.io :refer [file]]
+            [clojure.string :as str]
+            [clojure.tools.logging :as log]
+            [digest]
             [clj-libssh2.error :as error :refer [handle-errors with-timeout]]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.knownhost :as libssh2-knownhost]
@@ -14,10 +17,10 @@
 
    Arguments:
 
-   fail-on-mismatch Boolean, true if a call to check-fingerprint should fail if
-                    the remote host's fingerprint does not match the value in
-                    the known hosts file.
-   fail-on-missing  Boolean, true if a call to check-fingerprint should fail if
+   fail-on-mismatch Boolean, true if a call to check-host-key should fail if
+                    the remote host's key does not match the value in the known
+                    hosts file.
+   fail-on-missing  Boolean, true if a call to check-host-key should fail if
                     there is no entry for the remote host in the known hosts
                     file.
    result           The result of the call to libssh2_knownhost_checkp.
@@ -39,12 +42,12 @@
                                         libssh2/ERROR_HOSTKEY_SIGN
                                         0)
     libssh2/KNOWNHOST_CHECK_FAILURE   libssh2/ERROR_HOSTKEY_SIGN
-    (throw (ex-info "Unknown return code from libssh2_knownhost_checkp."
-                    {:function "libssh2_knownhost_checkp"
-                     :return result}))))
+    (error/raise "Unknown return code from libssh2_knownhost_checkp."
+                 {:function "libssh2_knownhost_checkp"
+                  :return result})))
 
-(defn- host-fingerprint
-  "Get the remote host's fingerprint.
+(defn- host-key
+  "Get the remote host's key.
 
    Arguments:
 
@@ -52,7 +55,7 @@
 
    Return:
 
-   A byte array containing the fingerprint of the remote host."
+   A byte array containing the key of the remote host."
   [session]
   (when (:session session)
     (let [len (IntByReference.)
@@ -60,7 +63,7 @@
           hostkey_ptr (libssh2-session/hostkey (:session session) len typ)]
       (.getByteArray hostkey_ptr 0 (.getValue len)))))
 
-(defn- check-fingerprint
+(defn- check-host-key
   "Call libssh2_knownhost_checkp to check the current remote host.
 
    Arguments:
@@ -70,24 +73,24 @@
    known-hosts      A native pointer from libssh2_knownhost_init.
    host             The hostname or IP of the remote host.
    port             The port in use for connecting to the remote host.
-   fingerprint      The remote host's fingerprint.
-   fail-on-missing  Fail if the remote host's fingerprint is not in the known
-                    hosts file.
-   fail-on-mismatch Fail if the remote host's fingerprint does not match the
-                    one found in the known hosts file.
+   host-key         The remote host's key.
+   fail-on-missing  Fail if the remote host's key is not in the known hosts
+                    file.
+   fail-on-mismatch Fail if the remote host's key does not match the one found
+                    in the known hosts file.
 
    Return:
 
-   0 on success or an exception if the fingerprint does not validate."
-  [session known-hosts host port fingerprint fail-on-missing fail-on-mismatch]
+   0 on success or an exception if the key does not validate."
+  [session known-hosts host port host-key fail-on-missing fail-on-mismatch]
   (handle-errors session
     (with-timeout :known-hosts
       (checkp-result fail-on-mismatch fail-on-missing
         (libssh2-knownhost/checkp known-hosts
                                   host
                                   port
-                                  fingerprint
-                                  (count fingerprint)
+                                  host-key
+                                  (count host-key)
                                   (bit-or libssh2/KNOWNHOST_TYPE_PLAIN
                                           libssh2/KNOWNHOST_KEYENC_RAW)
                                   (PointerByReference.))))))
@@ -114,9 +117,26 @@
                                     known-hosts-file
                                     libssh2/KNOWNHOST_FILE_OPENSSH)))))
 
+(defn- fingerprint
+  "Generate a fingerprint for a host key.
+
+   Arguments:
+
+   host-key The full host key as a byte array.
+
+   Return:
+
+   A String with a fingerprint of the host key."
+  [host-key]
+  (->> host-key
+       digest/sha-256
+       (partition 2)
+       (map #(str/join "" %))
+       (str/join ":")))
+
 (defn check
   "Given a session that has already completed a handshake with a remote host,
-   check the fingerprint of the remote host against the known hosts file.
+   check the host key of the remote host against the known hosts file.
 
    Arguments:
 
@@ -124,9 +144,10 @@
 
    Return:
 
-   0 on success or an exception if the fingerprint does not validate."
+   0 on success or an exception if the host key does not validate."
   [session]
   (let [known-hosts (libssh2-knownhost/init (:session session))
+        remote-host-key (host-key session)
         session-options (:options session)
         file (or (:known-hosts-file session-options)
                  (str (System/getProperty "user.home") "/.ssh/known_hosts"))
@@ -135,12 +156,15 @@
     (when (nil? known-hosts)
       (error/maybe-throw-error session libssh2/ERROR_ALLOC))
     (try
+      (log/infof "Loading known hosts file: %s" file)
       (load-known-hosts session known-hosts file)
-      (check-fingerprint session
-                         known-hosts
-                         (:host session)
-                         (:port session)
-                         (host-fingerprint session)
-                         fail-on-missing
-                         fail-on-mismatch)
+      (log/infof "Checking host key (%s) against known hosts file."
+                 (fingerprint remote-host-key))
+      (check-host-key session
+                      known-hosts
+                      (:host session)
+                      (:port session)
+                      remote-host-key
+                      fail-on-missing
+                      fail-on-mismatch)
       (finally (libssh2-knownhost/free known-hosts)))))
