@@ -398,19 +398,39 @@
   [session channel stream]
   (if (not= :eof (:status stream))
     (let [pump-fn (if (= :output (:direction stream)) pull push)
-          last-read-time (:last-read-time stream)
-          new-status (pump-fn session channel (:id stream) (:stream stream))
-          now (System/currentTimeMillis)]
-      (when (and (= pump-fn pull)
-                 (= :eagain new-status)
-                 (< (-> session :options :read-timeout) (- now last-read-time)))
-        (error/raise "Read timeout on a channel."
-                     {:direction (-> stream :direction name)
-                      :id (-> stream :id)
-                      :timeout (-> session :options :read-timeout)
-                      :session session}))
-      (assoc stream :status new-status :last-read-time now))
+          new-status (pump-fn session channel (:id stream) (:stream stream))]
+      (assoc stream :status new-status
+                    :last-read-time (if (= :ready new-status)
+                                      (System/currentTimeMillis)
+                                      (:last-read-time stream))))
     stream))
+
+(defn- enforce-read-timeout
+  "Enforce the read timeout on the output streams in a set of streams.
+
+   Arguments:
+
+   session  The clj-libssh2.session.Session object for the current session.
+   channel  The SSH channel that we're enforcing timeouts on.
+   streams  The collection of streams that are in use in pump
+
+   Return:
+
+   nil, or throw an exception if the timeout is exceeded on any of the streams
+   given."
+  [session channel streams]
+  (let [read-timeout (-> session :options :read-timeout)
+        last-read-time (->> streams
+                            (remove #(= :input (:direction %)))
+                            (map :last-read-time)
+                            (#(when-not (empty? %)
+                                (apply max %))))]
+    (when (and (some? last-read-time)
+               (< read-timeout (- (System/currentTimeMillis) last-read-time)))
+      (error/raise "Read timeout on a channel."
+                   {:timeout read-timeout
+                    :session session
+                    :channel channel}))))
 
 (defn pump
   "Process a collection of input and output streams all at once. This will run
@@ -452,6 +472,7 @@
             (do
               (when (contains? status-set :eagain)
                 (wait session))
+              (enforce-read-timeout session channel s)
               (recur (map (partial pump-stream session channel) streams)))
             (->> s
                  (filter #(= :output (:direction %)))

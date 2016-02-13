@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.test :as test]
             [net.n01se.clojure-jna :as jna]
-            [clj-libssh2.logging :as logging]))
+            [clj-libssh2.logging :as logging])
+  (:import [java.io File]))
 
 (def ssh-host "127.0.0.1")
 (def ssh-port 2222)
@@ -61,3 +62,11 @@
   (test/use-fixtures :once (test/join-fixtures
                              [with-sandbox-sshd
                               with-really-verbose-logging])))
+
+(defmacro with-temp-file
+  [file & body]
+  `(let [file# (File/createTempFile "clj-libssh2" nil)
+         ~file (.getPath file#)]
+     (try
+       (do ~@body)
+       (finally (.delete file#)))))
