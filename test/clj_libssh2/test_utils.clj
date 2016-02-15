@@ -2,6 +2,7 @@
   (:require [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clojure.test :as test]
+            [clojure-test-junit-output.core :refer [with-junit-output]]
             [net.n01se.clojure-jna :as jna]
             [clj-libssh2.logging :as logging])
   (:import [java.io File]))
@@ -60,7 +61,8 @@
 (defn fixtures
   []
   (test/use-fixtures :once (test/join-fixtures
-                             [with-sandbox-sshd
+                             [(with-junit-output "test/junit.xml")
+                              with-sandbox-sshd
                               with-really-verbose-logging])))
 
 (defmacro with-temp-file
