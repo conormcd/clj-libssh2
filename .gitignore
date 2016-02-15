@@ -11,3 +11,4 @@ pom.xml.asc
 .hg/
 doc/api
 test/debug.log
+test/junit.xml
