@@ -96,7 +96,8 @@
                                  (swap! output conj (String. b off len))))
             run-exec (future
                        (try
-                         (ssh/exec {:port 2222
+                         (ssh/exec {:blocking-timeout 5000
+                                    :port 2222
                                     :read-timeout 5000}
                                    (str "tail -F " tempfile)
                                    :out streaming-reader)
