@@ -149,7 +149,7 @@
       (let [output (FileOutputStream. local-path)
             file-size (.getSize fileinfo)
             read-chunk-size (-> session :options :read-chunk-size)
-            read-timeout (-> session :options :read-timeout)
+            read-timeout (-> session :options :timeout :read)
             finish (fn [bytes-read]
                      (.close output)
                      {:local-path local-path

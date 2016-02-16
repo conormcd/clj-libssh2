@@ -58,7 +58,7 @@
     (when-not (.exists (file keyfile))
       (error/raise (FileNotFoundException. keyfile))))
   (handle-errors session
-    (with-timeout :auth
+    (with-timeout session :auth
       (libssh2-userauth/publickey-fromfile (:session session)
                                            (:username credentials)
                                            (:public-key credentials)
@@ -70,7 +70,7 @@
   [session credentials]
   (log/info "Authenticating using a username and password.")
   (handle-errors session
-    (with-timeout :auth
+    (with-timeout session :auth
       (libssh2-userauth/password (:session session)
                                  (:username credentials)
                                  (:password credentials))))

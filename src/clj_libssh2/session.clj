@@ -15,16 +15,20 @@
    protect against attempting to close sessions twice."
   (atom #{}))
 
-(def default-opts
+(def ^:private default-opts
   "The default options for a session. These are not only the defaults, but an
    exhaustive list of the legal options."
-  {:blocking-timeout 60000
-   :character-set "UTF-8"
+  {:character-set "UTF-8"
    :fail-if-not-in-known-hosts false
    :fail-unless-known-hosts-matches true
    :known-hosts-file nil
    :read-chunk-size (* 1024 1024)
-   :read-timeout 60000
+   :timeout {:agent 5000        ; All agent operations
+             :auth 5000         ; All authentication calls
+             :known-hosts 5000  ; All interactions with the known hosts API
+             :lib 1000          ; Operations that are 100% local library calls
+             :read 60000        ; Reads from the remote host
+             :request 5000}     ; Simple calls to the remote host
    :write-chunk-size (* 1024 1024)})
 
 (defrecord Session [session socket host port options])
@@ -56,7 +60,9 @@
    keys in default-opts."
   [opts]
   {:pre [(map? opts) (every? (set (keys default-opts)) (keys opts))]}
-  (merge default-opts opts))
+  (merge default-opts
+         (assoc opts
+                :timeout (merge (:timeout default-opts) (:timeout opts)))))
 
 (defn- destroy-session
   "Free a libssh2 session object from a Session and optionally raise an
@@ -77,10 +83,10 @@
    (destroy-session session "Shutting down normally." false))
   ([session reason raise]
    (log/info "Tearing down the session.")
-   (socket/block session
+   (socket/block session :request
      (handle-errors session
        (libssh2-session/disconnect (:session session) reason)))
-   (socket/block session
+   (socket/block session :lib
      (handle-errors session
        (libssh2-session/free (:session session))))
    (when raise
@@ -98,7 +104,7 @@
    0 on success. Throws an exception on failure."
   [session]
   (log/info "Handshaking with the remote host.")
-  (socket/block session
+  (socket/block session :request
     (handle-errors session
       (libssh2-session/handshake (:session session) (:socket session)))))
 

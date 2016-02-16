@@ -25,11 +25,11 @@
   [session ssh-agent previous]
   (when (nil? previous)
     (handle-errors session
-      (with-timeout :agent
+      (with-timeout session :agent
         (libssh2-agent/list-identities ssh-agent))))
   (let [id (PointerByReference.)
         ret (handle-errors session
-              (with-timeout :agent
+              (with-timeout session :agent
                 (libssh2-agent/get-identity ssh-agent id previous)))]
     (case ret
       0 (.getValue id)
@@ -59,12 +59,12 @@
     (try
       (log/info "Connecting to the SSH agent...")
       (handle-errors session
-        (with-timeout :agent
+        (with-timeout session :agent
           (libssh2-agent/connect ssh-agent)))
       (when (loop [previous nil]
               (log/info "Fetching an ID to authenticate with...")
               (if-let [id (get-identity session ssh-agent previous)]
-                (when-not (= 0 (with-timeout :agent
+                (when-not (= 0 (with-timeout session :agent
                                  (libssh2-agent/userauth ssh-agent username id)))
                   (recur id))
                 :fail))
@@ -75,7 +75,7 @@
       true
       (finally
         (handle-errors session
-          (with-timeout :agent
+          (with-timeout session :agent
             (log/info "Disconnecting from the agent...")
             (libssh2-agent/disconnect ssh-agent)))
         (libssh2-agent/free ssh-agent)))))

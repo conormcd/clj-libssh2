@@ -6,14 +6,6 @@
             [clj-libssh2.libssh2.session :as libssh2-session])
   (:import [com.sun.jna.ptr IntByReference PointerByReference]))
 
-(def timeouts
-  "An atom map where the keys are keywords being the symbolic names of named
-   timeouts (see get-timeout/set-timeout) and the values are the number of
-   milliseconds for that timeout."
-  (atom {:agent 10000
-         :auth 10000
-         :known-hosts 10000}))
-
 (def error-messages
   "All of the error codes that are documented for libssh2 except for
    LIBSSH2_ERROR_SOCKET_NONE which despite its name is a generic error and
@@ -172,33 +164,20 @@
      (maybe-throw-error (:session session#) res#)
      res#))
 
-(defn get-timeout
-  "Get a timeout value.
+(defn enforce-timeout
+  "Throw an error if a timeout has been exceeded.
 
    Arguments:
 
-   name-or-value Either the name of a symbolic timeout (e.g. :session) or a
-                 number of milliseconds.
-
-   Return:
-
-   A number of milliseconds for the timeout."
-  [name-or-value]
-  (or (get @timeouts name-or-value) name-or-value 1000))
-
-(defn set-timeout
-  "Update a timeout value.
-
-   Arguments:
-
-   timeout-name The name of a symbolic timeout.
-   millis       The number of milliseconds for that timeout.
-
-   Return:
-
-   A map of all the current symbolic timeouts."
-  [timeout-name millis]
-  (swap! timeouts assoc timeout-name millis))
+   session    The clj-libssh2.session.Session object for the current session.
+   start-time The time the timeout is relative to.
+   timeout    The number of milliseconds describing the timeout value."
+  [session start-time timeout]
+  (when (< (if (keyword? timeout)
+             (-> session :options :timeout timeout)
+             timeout)
+           (- (System/currentTimeMillis) start-time))
+    (handle-errors session libssh2/ERROR_TIMEOUT)))
 
 (defmacro with-timeout
   "Run some code that could return libssh2/ERROR_EAGAIN and if it does, retry
@@ -213,22 +192,24 @@
 
    Arguments:
 
-   timeout Either a number of milliseconds or a keyword referring to a named
-           timeout set using set-timeout.
+   session The clj-libssh2.session.Session object for the current session.
+   timeout A number of milliseconds specifying the timeout. This macro will
+           wait for at least that number of milliseconds before failing with a
+           timeout error. It may return successfully sooner, but this value is
+           the minimum time you will wait for failure. The argument can also be
+           passed a keyword which will be looked up in the :timeout section of
+           the session options.
 
    Return:
 
    Either the return value of the code being wrapped or an exception if the
    timeout is exceeded."
-  [timeout & body]
+  [session timeout & body]
   `(let [start# (System/currentTimeMillis)
-         timeout# (get-timeout ~timeout)]
-     (loop [timedout# false]
-       (if timedout#
-         (raise (format "Timeout of %d ms exceeded" timeout#)
-                {:timeout ~timeout
-                 :timeout-length timeout#})
-         (let [r# (do ~@body)]
-           (if (= r# libssh2/ERROR_EAGAIN)
-             (recur (< timeout# (- (System/currentTimeMillis) start#)))
-             r#))))))
+         session# ~session
+         timeout# ~timeout]
+     (loop [result# (do ~@body)]
+       (enforce-timeout session# start# timeout#)
+       (if (= result# libssh2/ERROR_EAGAIN)
+         (recur (do ~@body))
+         result#))))

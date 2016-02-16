@@ -25,8 +25,7 @@
    0 on success. An exception will be thrown if an error occurs."
   [session channel]
   (log/info "Closing channel.")
-  (block session
-    (handle-errors session (libssh2-channel/close channel))))
+  (block session :lib (handle-errors session (libssh2-channel/close channel))))
 
 (defn exec
   "Execute a command on the remote host. This merely starts the execution of
@@ -44,7 +43,7 @@
    0 on success. An exception will be thrown if an error occurs."
   [session channel commandline]
   (log/info "Executing a command on the remote host.")
-  (block session
+  (block session :request
     (handle-errors session (libssh2-channel/exec channel commandline))))
 
 (defn exit-signal
@@ -117,7 +116,7 @@
 
    0 on success or throws an exception on failure."
   [session channel]
-  (block session (handle-errors session (libssh2-channel/free channel))))
+  (block session :lib (handle-errors session (libssh2-channel/free channel))))
 
 (defn open
   "Create a new channel for a session.
@@ -131,7 +130,7 @@
    A newly-allocated channel object, or throws exception on failure."
   [session]
   (log/info "Opening a new channel.")
-  (block-return session (libssh2-channel/open-session (:session session))))
+  (block-return session :lib (libssh2-channel/open-session (:session session))))
 
 (defn open-scp-recv
   "Create a new channel dedicated to receiving a file using SCP.
@@ -149,7 +148,7 @@
   [session remote-path]
   (log/info "Opening a new channel to receive a file using SCP.")
   (let [fileinfo (Stat/newInstance)]
-    {:channel (block-return session
+    {:channel (block-return session :request
                 (libssh2-scp/recv2 (:session session) remote-path fileinfo))
      :fileinfo fileinfo}))
 
@@ -175,7 +174,7 @@
   (let [mode (or mode 0644)
         mtime (or mtime 0)
         atime (or atime 0)]
-    (block-return session
+    (block-return session :request
       (libssh2-scp/send64 (:session session) remote-path mode size mtime atime))))
 
 (defn send-eof
@@ -191,7 +190,8 @@
    0 on success, throws an exception on failure."
   [session channel]
   (log/info "Notifying the remote host of EOF")
-  (block session (handle-errors session (libssh2-channel/send-eof channel))))
+  (block session :request
+    (handle-errors session (libssh2-channel/send-eof channel))))
 
 (defn setenv
   "Set a selection of environment variables on the channel. These will be
@@ -224,7 +224,7 @@
                                            {:session session})
                               ret))]
     (doseq [[k v] env]
-      (block session
+      (block session :request
         (handle-errors session
           (fail-if-forbidden
             (libssh2-channel/setenv channel (->str k) (->str v))))))))
@@ -419,7 +419,7 @@
    nil, or throw an exception if the timeout is exceeded on any of the streams
    given."
   [session channel streams]
-  (let [read-timeout (-> session :options :read-timeout)
+  (let [read-timeout (-> session :options :timeout :read)
         last-read-time (->> streams
                             (remove #(= :input (:direction %)))
                             (map :last-read-time)

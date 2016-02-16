@@ -84,7 +84,7 @@
    0 on success or an exception if the key does not validate."
   [session known-hosts host port host-key fail-on-missing fail-on-mismatch]
   (handle-errors session
-    (with-timeout :known-hosts
+    (with-timeout session :known-hosts
       (checkp-result fail-on-mismatch fail-on-missing
         (libssh2-knownhost/checkp known-hosts
                                   host
@@ -112,7 +112,7 @@
   [session known-hosts known-hosts-file]
   (when (.exists (file known-hosts-file))
     (handle-errors session
-      (with-timeout :known-hosts
+      (with-timeout session :known-hosts
         (libssh2-knownhost/readfile known-hosts
                                     known-hosts-file
                                     libssh2/KNOWNHOST_FILE_OPENSSH)))))
