@@ -5,12 +5,12 @@
 ; prefix since we have real namespaces in Clojure. Other constants defined in
 ; libssh2.h are replicated here without alteration.
 
-(def VERSION "1.6.0")
+(def VERSION "1.7.0")
 (def VERSION_MAJOR 1)
-(def VERSION_MINOR 6)
+(def VERSION_MINOR 7)
 (def VERSION_PATCH 0)
-(def VERSION_NUM 0x010600)
-(def SSH_BANNER "SSH-1.0-libssh2_1.6.0")
+(def VERSION_NUM 0x010700)
+(def SSH_BANNER "SSH-1.0-libssh2_1.7.0")
 (def SSH_DEFAULT_BANNER SSH_BANNER)
 (def SSH_DEFAULT_BANNER_WITH_CRLF (str SSH_DEFAULT_BANNER "\r\n"))
 

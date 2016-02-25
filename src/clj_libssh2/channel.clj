@@ -150,7 +150,7 @@
   (log/info "Opening a new channel to receive a file using SCP.")
   (let [fileinfo (Stat/newInstance)]
     {:channel (block-return session
-                (libssh2-scp/recv (:session session) remote-path fileinfo))
+                (libssh2-scp/recv2 (:session session) remote-path fileinfo))
      :fileinfo fileinfo}))
 
 (defn open-scp-send

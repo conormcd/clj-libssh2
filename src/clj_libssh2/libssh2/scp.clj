@@ -4,12 +4,19 @@
   (:require [net.n01se.clojure-jna :as jna])
   (:import [com.sun.jna Pointer]))
 
-(def ^{:arglists '([session path sb])} recv
+(def ^{:arglists '([session path sb]) :deprecated "libssh2"} recv
   "
    LIBSSH2_CHANNEL *libssh2_scp_recv(LIBSSH2_SESSION *session,
                                      const char *path,
                                      struct stat *sb);"
   (jna/to-fn Pointer ssh2/libssh2_scp_recv))
+
+(def ^{:arglists '([session path sb])} recv2
+  "
+   LIBSSH2_CHANNEL *libssh2_scp_recv(LIBSSH2_SESSION *session,
+                                     const char *path,
+                                     libssh2_struct_stat *sb);"
+  (jna/to-fn Pointer ssh2/libssh2_scp_recv2))
 
 (def ^{:arglists '([session path mode size mtime atime]) :deprecated "libssh2"} send-ex
   "
