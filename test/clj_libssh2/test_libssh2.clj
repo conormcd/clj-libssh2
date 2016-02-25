@@ -7,4 +7,4 @@
 
 (deftest check-libssh2-version-is-ok
   "This shoudln't change by surprise!"
-  (is (= "1.6.0" (libssh2/version 0))))
+  (is (= "1.7.0" (libssh2/version 0))))
