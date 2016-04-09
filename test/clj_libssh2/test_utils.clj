@@ -1,15 +1,36 @@
 (ns clj-libssh2.test-utils
   (:require [clojure.java.shell :as sh]
             [clojure.string :as str]
-            [clojure.test :as test]
+            [clojure.test :as test :refer [is]]
             [clojure-test-junit-output.core :refer [with-junit-output]]
             [net.n01se.clojure-jna :as jna]
-            [clj-libssh2.logging :as logging])
+            [clj-libssh2.logging :as logging] 
+            [clj-libssh2.session :as session])
   (:import [java.io File]))
 
 (def ssh-host "127.0.0.1")
 (def ssh-port 2222)
 (defn ssh-user [] (System/getProperty "user.name"))
+
+(defmacro with-test-session
+  [session session-params & body]
+  `(let [session-params# ~session-params
+         params# (merge {:hostname (or (:hostname session-params# ssh-host))
+                         :port (or (:port session-params#) ssh-port)
+                         :credentials (merge {:username (ssh-user)}
+                                             (:credentials session-params#))}
+                        (dissoc session-params# :hostname :port :credentials))]
+     (session/with-session session# params#
+       ~@body)))
+
+(defn auth
+  ([]
+   (auth {}))
+  ([session-params]
+   (is (= 0 (count @session/sessions)))
+   (with-test-session session session-params
+     (is (= 1 (count @session/sessions))))
+   (is (= 0 (count @session/sessions)))))
 
 (defn test-script
   [script]
