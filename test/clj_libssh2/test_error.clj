@@ -41,7 +41,8 @@
                           (error/maybe-throw-error nil -10000)))))
 
 (deftest with-timeout-works
-  (let [test-func (fn [& args]
+  (let [session {:options {:timeout {:sym 5000}}}
+        test-func (fn [& args]
                     (let [state (atom (vec args))]
                       (fn []
                         (when (empty? @state)
@@ -60,26 +61,25 @@
         (is (thrown? Exception (f)))))
     (testing "with-timeout doesn't retry successful function calls"
       (let [f (test-func 0)]
-        (is (= 0 (error/with-timeout 10000 (f))))))
+        (is (= 0 (error/with-timeout session 10000 (f))))))
     (testing "with-timeout doesn't retry failed function calls"
       (let [f (test-func libssh2/ERROR_ALLOC)]
-        (is (= libssh2/ERROR_ALLOC (error/with-timeout 10000 (f))))))
+        (is (= libssh2/ERROR_ALLOC (error/with-timeout session 10000 (f))))))
     (testing "with-timeout retries when it sees EAGAIN"
       (let [f (test-func libssh2/ERROR_EAGAIN 0)]
-        (is (= 0 (error/with-timeout 10000 (f))))))
+        (is (= 0 (error/with-timeout session 10000 (f))))))
     (testing "with-timeout doesn't retry exceptions"
       (let [f (test-func #(throw (Exception. "")) 0)]
-        (is (thrown-with-msg? Exception #"" (error/with-timeout 10000 (f))))
-        (is (= 0 (error/with-timeout 10000 (f))))))
+        (is (thrown-with-msg? Exception #"" (error/with-timeout session 10000 (f))))
+        (is (= 0 (error/with-timeout session 10000 (f))))))
     (testing "with-timeout obeys the timeout"
       (let [f (test-func #(do (Thread/sleep 20)
                               libssh2/ERROR_EAGAIN)
                          0)]
-        (is (thrown? Exception (error/with-timeout 10 (f))))))
+        (is (thrown? Exception (error/with-timeout session 10 (f))))))
     (testing "with-timeout can deal with fast-returning functions."
       (let [f (constantly libssh2/ERROR_EAGAIN)]
-        (is (thrown? Exception (error/with-timeout 100 (f))))))
+        (is (thrown? Exception (error/with-timeout session 100 (f))))))
     (testing "with-timeout can use symbolic times"
-      (with-redefs [error/timeouts (atom {:sym 5000})]
-        (let [f (test-func libssh2/ERROR_EAGAIN 1)]
-          (is (= 1 (error/with-timeout :sym (f)))))))))
+      (let [f (test-func libssh2/ERROR_EAGAIN 1)]
+        (is (= 1 (error/with-timeout session :sym (f))))))))

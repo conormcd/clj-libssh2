@@ -95,33 +95,29 @@
        (when (>= 0 select-result)
          (handle-errors session libssh2/ERROR_TIMEOUT))))))
 
-(defn enforce-blocking-timeout
-  [session start-time]
-  (when (< (-> session :options :blocking-timeout)
-           (- (System/currentTimeMillis) start-time))
-    (handle-errors session libssh2/ERROR_TIMEOUT)))
-
 (defmacro block
   "Turn a non-blocking call that returns EAGAIN into a blocking one."
-  [session & body]
+  [session timeout & body]
   `(let [session# ~session
-         start-time# (System/currentTimeMillis)]
+         start-time# (System/currentTimeMillis)
+         timeout# ~timeout]
      (while (= libssh2/ERROR_EAGAIN (do ~@body))
        (handle-errors session#
          (wait session# start-time#))
-       (enforce-blocking-timeout session# start-time#))))
+       (error/enforce-timeout session# start-time# timeout#))))
 
 (defmacro block-return
   "Similar to block, but for functions that return a pointer"
-  [session & body]
+  [session timeout & body]
   `(let [session# ~session
-         start-time# (System/currentTimeMillis)]
+         start-time# (System/currentTimeMillis)
+         timeout# ~timeout]
      (loop [result# (do ~@body)]
        (if (nil? result#)
          (let [errno# (libssh2-session/last-errno (:session session#))]
            (handle-errors session# errno#)
            (when (= libssh2/ERROR_EAGAIN errno#)
              (wait session# start-time#))
-           (enforce-blocking-timeout session# start-time#)
+           (error/enforce-timeout session# start-time# timeout#)
            (recur (do ~@body)))
          result#))))
