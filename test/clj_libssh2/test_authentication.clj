@@ -2,23 +2,14 @@
   (:require [clojure.test :refer :all]
             [clj-libssh2.libssh2 :as libssh2]
             [clj-libssh2.libssh2.userauth :as libssh2-userauth]
-            [clj-libssh2.session :as session]
             [clj-libssh2.test-utils :as test])
   (:use clj-libssh2.authentication))
 
 (test/fixtures)
 
-(defn auth
-  [creds]
-  (is (= 0 (count @session/sessions)))
-  (let [session (session/open test/ssh-host test/ssh-port creds {})]
-    (is (= 1 (count @session/sessions)))
-    (session/close session))
-  (is (= 0 (count @session/sessions))))
-
 ; This is more fully tested in clj-libssh2.test-agent
 (deftest agent-authentication-works
-  (is (auth (->AgentCredentials (test/ssh-user)))))
+  (is (test/auth {:credentials (->AgentCredentials (test/ssh-user))})))
 
 (deftest key-authentication-works
   (let [user (test/ssh-user)
@@ -41,22 +32,22 @@
         bad-pubkey (->KeyCredentials user "" "/bad" (pubkey ""))]
     (testing "A passphrase-less key works"
       (is (valid? no-passphrase))
-      (is (auth no-passphrase)))
+      (is (test/auth {:credentials no-passphrase})))
     (testing "A key with a passphrase works"
       (is (valid? with-passphrase))
-      (is (auth with-passphrase)))
+      (is (test/auth {:credentials with-passphrase})))
     (testing "A valid but unauthorized key does not work"
       (is (valid? unauthorized))
-      (is (thrown? Exception (auth unauthorized))))
+      (is (thrown? Exception (test/auth {:credentials unauthorized}))))
     (testing "It fails if the private key file doesn't exist"
       (is (valid? bad-privkey))
-      (is (thrown? Exception (auth bad-privkey))))
+      (is (thrown? Exception (test/auth {:credentials bad-privkey}))))
     (testing "It fails if the public key file doesn't exist"
       (is (valid? bad-pubkey))
-      (is (thrown? Exception (auth bad-pubkey))))
+      (is (thrown? Exception (test/auth {:credentials bad-pubkey}))))
     (testing "It fails if the passphrase is incorrect"
       (is (valid? with-wrong-passphrase))
-      (is (thrown? Exception (auth with-wrong-passphrase))))))
+      (is (thrown? Exception (test/auth {:credentials with-wrong-passphrase}))))))
 
 ; We can't test this all the way without knowing a password on the local
 ; machine. We can test with libssh2_userauth_password stubbed and some error
@@ -68,15 +59,16 @@
                          (->PasswordCredentials (test/ssh-user) password))]
     (testing "A successful authentication returns true"
       (with-redefs [libssh2-userauth/password (constantly 0)]
-        (is (auth (password-creds "doesn't matter")))))
+        (is (test/auth {:credentials (password-creds "doesn't matter")}))))
     (testing "It fails to authenticate with the wrong password"
-      (is (thrown? Exception (auth (password-creds "the wrong password")))))
+      (is (thrown? Exception (test/auth {:credentials (password-creds "the wrong password")}))))
     (testing "A library error does not result in a crash"
       (with-redefs [libssh2-userauth/password (constantly libssh2/ERROR_ALLOC)]
-        (is (thrown? Exception (auth (password-creds "doesn't matter"))))))))
+        (is (thrown? Exception (test/auth {:credentials (password-creds "doesn't matter")})))))))
 
 (deftest authenticating-with-a-map-fails-if-there's-no-equivalent-record
   (is (thrown-with-msg?
         Exception
         #"Failed to determine credentials type"
-        (auth {:password "foo"}))))
+        (test/auth {:credentials {:username nil
+                                  :password "foo"}}))))
