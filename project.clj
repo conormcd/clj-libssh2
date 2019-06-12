@@ -1,4 +1,7 @@
-(defproject clj-libssh2 "0.1.0-SNAPSHOT"
+(defproject clj-libssh2 (try
+                         (slurp "/workspace/version")
+                         (catch Exception _
+                           "0.1.0-SNAPSHOT"))
   :description "A Clojure wrapper around libssh2"
   :url "https://github.com/conormcd/clj-libssh2"
   :license {:name "BSD"

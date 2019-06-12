@@ -1,0 +1,143 @@
+---
+
+version: 2.1
+
+workflows:
+  test-and-release:
+    jobs:
+      - compute-version:
+          filters:
+            branches:
+              ignore:
+                - gh-pages
+      - build-docs:
+          requires:
+            - compute-version
+          filters:
+            branches:
+              ignore:
+                - gh-pages
+                - master
+      - test:
+          requires:
+            - compute-version
+          filters:
+            branches:
+              ignore:
+                - gh-pages
+      - deploy:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
+      - update-docs:
+          requires:
+            - deploy
+          filters:
+            branches:
+              only:
+                - master
+
+jobs:
+  compute-version:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - run:
+          name: Stash the version in the workspace
+          command: |
+            mkdir -p /workspace
+            echo -n "0.1.${CIRCLE_BUILD_NUM}" > /workspace/version
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - version
+  build-docs:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /workspace
+      - restore_cache:
+          keys:
+            - v1-m2-{{ checksum "project.clj" }}
+      - run: lein deps
+      - save_cache:
+          key: v1-m2-{{ checksum "project.clj" }}
+          paths:
+            - ~/.m2
+      - run: lein codox
+      - store_artifacts:
+          path: doc/api
+  test:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: Install sshd
+          command: |
+            apt-get update -y
+            apt-get install -y --no-install-recommends openssh-server
+            mkdir -p /run/sshd
+      - restore_cache:
+          keys:
+            - v1-m2-{{ checksum "project.clj" }}
+      - run: lein deps
+      - save_cache:
+          key: v1-m2-{{ checksum "project.clj" }}
+          paths:
+            - ~/.m2
+      - run: lein test
+      - run:
+          name: Move JUnit results
+          when: always
+          command: |
+            mkdir lein-test
+            cp test/junit.xml lein-test/
+      - store_test_results:
+          path: lein-test
+      - store_artifacts:
+          path: test/debug.log
+  deploy:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "d2:c7:c5:4d:9d:8c:55:b9:99:49:93:3f:ee:04:29:de"
+      - checkout
+      - attach_workspace:
+          at: /workspace
+      - run: lein deploy clojars
+      - run:
+          name: Push a git tag for this release
+          command: |
+            git tag "$(find target -type f -name '*.jar' | sed -e 's,^target/clj-libssh2-,,' -e 's,-.*,,')"
+            git push --tags
+  update-docs:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: Prepare git
+          command: |
+            git config --global user.email conormcd@users.noreply.github.com
+            git config --global user.name conormcd
+            git clone -b gh-pages git@github.com:conormcd/clj-libssh2.git doc/api
+      - run: lein codox
+      - run:
+          name: Commit new docs
+          command: |
+            cd doc/api
+            git add .
+            git commit -m "Automatically update docs"
+            git push origin gh-pages
