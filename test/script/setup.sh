@@ -56,7 +56,6 @@ generate_known_hosts_files() {
 
 generate_sshd_host_keys() {
   require_executable ssh-keygen
-  ssh-keygen -N '' -t rsa1 -f "${TMP_DIR}/ssh_host_key" > /dev/null
   ssh-keygen -N '' -t dsa -f "${TMP_DIR}/ssh_host_dsa_key" > /dev/null
   ssh-keygen -N '' -t rsa -f "${TMP_DIR}/ssh_host_rsa_key" > /dev/null
 }
@@ -66,15 +65,15 @@ generate_user_keys() {
   require_executable ssh-keygen
 
   # The key to be used for most tests.
-  ssh-keygen -N '' -t rsa -f "${TMP_DIR}/id_rsa" > /dev/null
+  ssh-keygen -N '' -t rsa -m pem -f "${TMP_DIR}/id_rsa" > /dev/null
   ssh-add "${TMP_DIR}/id_rsa" > /dev/null 2>&1
 
   # A key to be used for tests to ensure we can pass a passphrase.
   ssh-keygen -N 'correct horse battery staple' \
-    -t rsa -f "${TMP_DIR}/id_rsa_with_passphrase" > /dev/null
+    -t rsa -m pem -f "${TMP_DIR}/id_rsa_with_passphrase" > /dev/null
 
   # A key that will never be in authorized_keys.
-  ssh-keygen -N '' -t rsa -f "${TMP_DIR}/id_rsa_never_authorised" > /dev/null
+  ssh-keygen -N '' -t rsa -m pem -f "${TMP_DIR}/id_rsa_never_authorised" > /dev/null
 
   # Generate authorized_keys
   cat "${TMP_DIR}/id_rsa.pub" \
@@ -101,7 +100,6 @@ launch_sshd() {
   generate_user_keys
   sshd=$(which sshd)
   ${sshd} -f /dev/null \
-          -h "${TMP_DIR}/ssh_host_key" \
           -h "${TMP_DIR}/ssh_host_dsa_key" \
           -h "${TMP_DIR}/ssh_host_rsa_key" \
           -o "AcceptEnv=*" \
