@@ -39,6 +39,11 @@ workflows:
             branches:
               only:
                 - master
+      - gh-pages-dummy:
+          filters:
+            branches:
+              only:
+                - gh-pages
 
 jobs:
   compute-version:
@@ -144,3 +149,10 @@ jobs:
             git add .
             git commit -m "Automatically update docs"
             git push origin gh-pages
+  gh-pages-dummy:
+    docker:
+      - image: clojure:lein-2.9.1
+    steps:
+      - run:
+          name: This is a dummy job so that we have something for gh-pages
+          command: echo "Nothing to do"
